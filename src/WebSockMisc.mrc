@@ -309,3 +309,9 @@ menu @WebSocketDebug {
 on *:CLOSE:@WebSocketDebug:{
   .disable #WebSocket_Debug
 }
+
+on *:UNLOAD:{
+  sockclose WebSocket_*
+  hfree -w WebSocket_
+  .timerWebSocket_TimeOut_* off
+}

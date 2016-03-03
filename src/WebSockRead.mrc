@@ -199,7 +199,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
             break
           }
           %HeadSize = 4
-          %FragSize = $_WebSocket.ToInt($bvar(&RecvData, 3, 2))
+          %FragSize = $bvar(&RecvData, 3, 2).nword
         }
 
         ;; If the 2nd octlet is equal to 127, the fragment size the the following 8 octlets
