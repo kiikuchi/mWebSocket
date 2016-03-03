@@ -1,5 +1,5 @@
-# mWebSockets for mIRC  
-mWebSockets for mIRC is an mIRC script that aims to implement the [WebSocket Standard](https://tools.ietf.org/html/rfc6455) within mIRC. It is not, however, a fully featured HTTP client. As such it will not follow HTTP redirects or process non-websocket related responses.  
+# mWebSocket
+mWebSocket aims to implement the client portion of the [WebSocket Standard](https://tools.ietf.org/html/rfc6455) in mSL for mIRC and AdiIRC. It is not, however, a fully featured HTTP client. As such it will not follow HTTP redirects or process non-websocket related responses.  
 &nbsp;  
 The project is currently in a very alpha stage but is being routinly update.  
 &nbsp;  
