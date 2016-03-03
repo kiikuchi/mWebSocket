@@ -324,7 +324,8 @@ Events
 &nbsp;  
 &nbsp;  
 
-#### Special Thanks  
+Special Thanks
+--------------
 > ACPixel: Giving me the idea  
 > Membear: Giving me extensive examples to help me understand the protocol  
 > Ouims:   Various general help  
