@@ -112,8 +112,14 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
   elseif (!$hget($sockname)) {
     %Error = INTERNAL_ERROR socket-state hashtable doesn't exist
   }
-  elseif ($hget($sockname, SOCK_STATE) !== 1 || !$hget($sockname, HTTPREQ_HOST) || !$hget($Sockname, HTTP_RES)) {
-    %Error = INTERNAL_ERROR State doesn't corrospond with attempting to connect
+  elseif ($hget($sockname, SOCK_STATE) != 1) {
+    %Error = INTERNAL_ERROR State doesn't corrospond with connection attempt
+  }
+  elseif (!$len($hget($sockname, HTTPREQ_HOST))) {
+    %Error = INTERNAL_ERROR State table does not contain host name
+  }
+  elseif (!$len($hget($Sockname, HTTPREQ_RES)) {
+    %Error = INTERNAL_ERROR State table does not contain a resource to request
   }
   else {
     _WebSocket.Debug -i SockOpen> $+ %name $+ ~Preparing request head

@@ -254,7 +254,7 @@ alias -l _WebSocket.BAdd {
 
 ;; if the group is on the contained alias is used for outputting debug messages:
 ;; /_WebSocket.Debug -ewiNs [title~][msg]
-#WebSocket_Debug on
+#WebSocket_Debug off
 alias -l _WebSocket.Debug {
 
   ;; if the debug window isn't open, disable debugging
@@ -310,6 +310,7 @@ on *:CLOSE:@WebSocketDebug:{
   .disable #WebSocket_Debug
 }
 
+;; If the script gets unloaded, cleanup open WebSocket instances
 on *:UNLOAD:{
   sockclose WebSocket_*
   hfree -w WebSocket_
