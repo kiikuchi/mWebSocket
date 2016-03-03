@@ -130,7 +130,7 @@ alias WebSock {
 ;; /WebSockHeader Header Value
 alias WebSockHeader {
   var %Error, %Name, %Sock
-  if ($isid || !$event !== signal || !$regex(name, $signal, ^WebSocket_INIT_(?!-)(?!\d*$)(.*)$)) {
+  if ($isid || $event !== signal || !$regex(name, $signal, ^WebSocket_INIT_(?!-)(?!\d*$)(.*)$)) {
     return
   }
   else {
@@ -166,7 +166,7 @@ alias WebSockHeader {
 ;; $WebSockType
 ;;   Returns the frame type
 alias WebSockType {
-  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
     return
   }
   return $hget(WebSocket_ $+ $regml(event, 1), WSFRAME_TYPE)
@@ -175,7 +175,7 @@ alias WebSockType {
 ;; $WebSockText
 ;;   Returns the frame data as utf8 text
 alias WebSockText {
-  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
     return
   }
   bunset &_WebSockFrameData
@@ -187,7 +187,7 @@ alias WebSockText {
 ;; $WebSockData(&bvar)
 ;;   fills the specified bvar with the frame data
 alias WebSockData {
-  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
     return
   }
   elseif ($0 == 1 && &?* !iswm $1 && $chr(32) isin $1) {
@@ -201,7 +201,7 @@ alias WebSockData {
 ;; $WebSockErr
 ;;   Returns the error that caused the error event to be raised
 alias WebSockErr {
-  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
+  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
     return
   }
   return $gettok($hget(WebSocket_ $+ $regml(event, 1), ERROR), 1, 32)
@@ -210,7 +210,7 @@ alias WebSockErr {
 ;; $WebSockErrMsg
 ;;   Returns the error msg that caused the error event to be raised
 alias WebSockErrMsg {
-  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
+  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
     return
   }
   return $gettok($hget(WebSocket_ $+ $regml(event, 1), ERROR), 2-, 32)
@@ -249,7 +249,7 @@ alias WebSockDebug {
 ;; /_WebSocket.BAdd &bvar text
 ;; adds the specified text to the end of the bvar
 alias -l _WebSocket.BAdd {
-  bvar -t $1 $calc($bvar($1, 0) + 1) $2- $+ $crlf
+  bset -t $1 $calc($bvar($1, 0) + 1) $2- $+ $crlf
 }
 
 ;; if the group is on the contained alias is used for outputting debug messages:
