@@ -109,7 +109,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
             $+(.timer, WebSocket_Timeout_, %Name) off
             hadd -m $sockname SOCK_STATE 4
             _WebSocket.Debug -s %Name $+ >HANDSHAKE~Handshake complete; ready to send and recieve frames!
-            .signal -n WebSocket_READY_ $+ %Name %Name
+            .signal -n WebSocket_READY_ $+ %Name
           }
         }
 
@@ -138,9 +138,12 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
 
     ;; cleanup before processing
     bunset &RecvData
+    hdel $sockname WSFRAME_DATA
+    hdel $sockname WSFRAME_TYPE
 
     ;; Begin looping over the buffer data to seperate frames
     while ($bvar(&Buffer, 0) >= 2) {
+
       %HeadData = $bvar(&RecvData, 1, 1)
       %HeadSize = 2
       %FragSize = $base(&RecvData, 2, 1)
@@ -229,6 +232,9 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           bcopy -c &RecvData 1 &RecvData $calc($v1 +1) -1
         }
 
+        hadd -mb WSFRAME_DATA &FrameData
+        hadd -mb WSFRAME_TYPE $calc(%HeadData % 128)
+
         ;; Control-Frame (CLOSE)
         if (%HeadData == 136) {
 
@@ -241,7 +247,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           ;;   Otherwise: output debug message, raise event, cleanup after the connection, exit processing
           elseif ($hget($sockname, CLOSE_PENDING)) {
             _WebSocket.Debug -i2 %Name $+ >FRAME:CLOSE~Close frame reply received; closing connection.
-            .signal -n WebSocket_CLOSE_ $+ %Name %Name &FrameData
+            .signal -n WebSocket_CLOSE_ $+ %Name
             _WebSocket.Cleanup $sockname
           }
 
@@ -249,7 +255,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           ;;   Output debug message, raise closing event, update sock state, and queue close frame
           else {
             _WebSocket.Debug -i %Name $+ >FRAME:CLOSE~Close frame received.
-            .signal -n WebSocket_CLOSING_ $+ %Name %Name &FrameData
+            .signal -n WebSocket_CLOSING_ $+ %Name %Name
             hadd -m $sockname SOCK_STATE 5
             WebSockClose $sockname
           }
@@ -260,14 +266,14 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         ;;   Output debug message, raise Ping event, queue pong frame
         elseif (%HeadData == 137) {
           _WebSocket.Debug -i %Name $+ >FRAME:PING~Ping frame received.
-          .signal -n WebSocket_PING_ $+ %Name %Name &FrameData
+          .signal -n WebSocket_PING_ $+ %Name
           WebSockWrite -P $sockname &FrameData
         }
 
         ;; Control-Frame (PONG)
         elseif (%HeadData == 138) {
           _WebSocket.Debug -i %Name $+ >FRAME:PING~Pong frame received.
-          .signal -n WebSocket_PONG_ $+ %Name %Name &FrameData
+          .signal -n WebSocket_PONG_ $+ %Name
         }
 
         ;; if the frame is not a final-fragment, store the data for the next frame read
@@ -279,9 +285,13 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         ;; Data-Frame: TEXT(129) or BINARY(130)
         elseif (%HeadData == 129 || %HeadData == 130) {
           _WebSocket.Debug -i %Name $+ >FRAME:Data~ $+ $iif(%HeadData == 129, Text, Binary) frame recieved
-          .signal -n WebSocket_DATA_ $+ %Name %Name &FrameData $calc(%HeadData % 128)
+          .signal -n WebSocket_DATA_ $+ %Name
         }
       }
+
+      ;; cleanup
+      hdel $sockname WSFRAME_DATA
+      hdel $sockname WSFRAME_TYPE
 
       ;; if an error occured, exit looping
       if (%Error) {
@@ -305,13 +315,12 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
 
   ;; Handle errors
   :error
-  if ($error || %Error) {
-    %Error = $v1
+  %Error = $iif($error, MIRC_ERROR $v1, %Error)
+  if (%Error) {
     reseterror
-
-    ;; Log error, Raise Event, then cleanup
     _WebSocket.Debug -e SockRead> $+ %Name $+ ~ $+ %Error
-    .signal -n WebSocket_ERROR_ $+ %Name %Name %Error
+    hadd -m $sockname ERROR %Error
+    .signal -n WebSocket_ERROR_ $+ %Name
     _WebSocket.Cleanup $sockname
   }
 }

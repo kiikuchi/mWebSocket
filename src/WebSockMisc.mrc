@@ -163,6 +163,58 @@ alias WebSockHeader {
   }
 }
 
+;; $WebSockType
+;;   Returns the frame type
+alias WebSockType {
+  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+    return
+  }
+  return $hget(WebSocket_ $+ $regml(event, 1), WSFRAME_TYPE)
+}
+
+;; $WebSockText
+;;   Returns the frame data as utf8 text
+alias WebSockText {
+  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+    return
+  }
+  bunset &_WebSockFrameData
+  if ($hget(WebSocket_ $+ $regml(event, 1), WSFRAME_DATA, &_WebSockFrameData)) {
+    return $bvar(&_WebSockFrameData, 1, 4000).text
+  }
+}
+
+;; $WebSockData(&bvar)
+;;   fills the specified bvar with the frame data
+alias WebSockData {
+  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+    return
+  }
+  elseif ($0 == 1 && &?* !iswm $1 && $chr(32) isin $1) {
+    if ($bvar($1, 0)) {
+      bunset $1
+    }
+    return $hget(WebSocket_ $+ $regml(event, 1)m WSFRAME_DATA, $1)
+  }
+}
+
+;; $WebSockErr
+;;   Returns the error that caused the error event to be raised
+alias WebSockErr {
+  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
+    return
+  }
+  return $gettok($hget(WebSocket_ $+ $regml(event, 1), ERROR), 1, 32)
+}
+
+;; $WebSockErrMsg
+;;   Returns the error msg that caused the error event to be raised
+alias WebSockErrMsg {
+  if ($isid || !$event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
+    return
+  }
+  return $gettok($hget(WebSocket_ $+ $regml(event, 1), ERROR), 2-, 32)
+}
 
 ;; /WebSockDebug [on|off]
 ;; $WebSockDebug

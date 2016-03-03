@@ -38,8 +38,9 @@ alias WebSockWrite {
 
   ;; validate socket state
   elseif (!$hget(%Sock) || !$len($hget(%Sock $+ $1, SOCK_STATE))) {
+    hadd -m %Sock ERROR INTERNAL_ERROR State lost
     _WebSocket.Debug -e %Name $+ >STATE~State lost for %Name
-    .signal -n WebSocket_Error_ $+ %Name %Name INTERNAL_ERROR State Lost
+    .signal -n WebSocket_Error_ $+ %Name
     _WebSocket.Cleanup %Sock
     %Error = State lost; connection ended
   }
@@ -118,7 +119,7 @@ alias WebSockWrite {
       while (%Index <= %Size) {
 
         ;; mask the byte and append it to the frame
-        bset &Frame $calc($bvar(&Frame, 0) + 1) $xor($bvar(%BVar, %Index), $($+(%, M, $calc((%Index - 1) % 4 + 1)), 2))
+        bset &Frame $calc($bvar(&Frame, 0) + 1) $xor($bvar(%BVar, %Index), $($+(%, MaskByte, $calc((%Index - 1) % 4 + 1)), 2))
         inc %Index
       }
     }
@@ -171,7 +172,7 @@ alias -l _WebSocket.Send {
     if (!$hget($1, HTTPREQ_HEAD, &WebSocketSend) && !$sock($1).sq) {
       _WebSocket.Debug -i2 %Name $+ >Head_Sent Finished sending request.
       hadd -m $sockname SOCK_STATE 3
-      .signal -n WebSocket_REQSENT_ $+ %Name %Name
+      .signal -n WebSocket_REQSENT_ $+ %Name
     }
 
     ;; if there's data to send and room in the send buffer
@@ -247,11 +248,12 @@ on $*:SOCKWRITE:/^WebSocket_[^?*]*$/:{
 
   ;; Handle errors
   :error
-  if ($error || %Error) {
-    %Error = $v1
+  %Error = $iif($error, MIRC_ERROR $v1, %Error)
+  if (%Error) {
     reseterror
+    hadd -m $sockname ERROR %Error
     _WebSocket.debug -e %Name $+ >SOCKWRITE~ $+ %Error
-    .signal WebSocket_ERROR_ $+ %Name %Name
+    .signal WebSocket_ERROR_ $+ %Name
     _WebSocket.Cleanup $sockname
   }
 }

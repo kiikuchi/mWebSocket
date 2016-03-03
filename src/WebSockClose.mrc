@@ -1,9 +1,3 @@
-/*Possible Events Raised
-;;  Error
-;;  Close
-;;  Fin
-*/
-
 ;; /WebSockClose -f sockname
 alias WebSockClose {
   var %Switches, %Error, %Name = $1, %Sock = WebSocket_ $+ %Name
@@ -78,7 +72,7 @@ alias -l _WebSocket.Cleanup {
 
   ;; Raise finished event
   if ($show) {
-    .signal -n WebSocket_FINISHED_ $+ %Name %Name
+    .signal -n WebSocket_FINISHED_ $+ %Name
   }
 }
 
@@ -100,17 +94,18 @@ on $*:SOCKCLOSE:/^WebSocket_[^\d?*][^?*]*$/:{
 
   ;; handle errors
   :error
-  if ($error || %Error) {
-    %Error = $v1
+  %Error = $iif($error, MIRC_ERROR $v1, %Error)
+  if (%Error) {
     reseterror
+    hadd -m $sockname ERROR %Error
     _WebSocket.Debug -e %Name $+ >SOCKCLOSE~ $+ %Error
-    .signal -n WebSocket_ERROR_ $+ %Name %Name %Error
+    .signal -n WebSocket_ERROR_ $+ %Name
   }
 
   ;; otherwise, report successful close
   else {
     _WebSocket.Debug -s %Name $+ >SOCKCLOSE~Connection Closed
-    .signal -n WebSocket_CLOSE_ $+ %Name %Name
+    .signal -n WebSocket_CLOSE_ $+ %Name
   }
 
   ;; cleanup

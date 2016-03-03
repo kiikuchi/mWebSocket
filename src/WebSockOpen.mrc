@@ -156,14 +156,15 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
 
   ;; Handle errors
   :error
-  if ($error || %Error) {
+  %Error = $iif($error, MIRC_ERROR $v1, %Error)
+  if (%Error) {
     %Error = $v1
     reseterror
 
     ;; Log error, raise error event, cleanup socket
     _WebSocket.Debug -e SockOpen> $+ %Name $+ ~ $+ %Error
+    hadd -m $sockname ERROR %Error
     .signal -n WebSocket_ERROR_ $+ %Name %Name %Error
-    hadd -m $sockname SOCK_STATE 0
     _WebSocket.Cleanup $sockname
   }
 }
