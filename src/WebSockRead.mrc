@@ -1,5 +1,5 @@
 
-on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
+on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %FragSize
 
   ;; Basic Error checks
@@ -66,7 +66,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
         }
 
         ;; If the HTTP version is not HTTP/1.1
-        elseif ($hget($sockname, HTTPRESP_HttpVersion) !== HTTP/1.1) {
+        elseif ($hget($sockname, HTTPRESP_HttpVersion) !== 1.1) {
           %Error = HTTP_ERROR Unacceptable HTTP version: $v1
         }
 

@@ -99,7 +99,7 @@ alias -l _WebSocket.ConnectTimeout {
   _WebSocket.RaiseError $1 SOCK_ERROR Connection timout
 }
 
-on $*:SOCKOPEN:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
+on $*:SOCKOPEN:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %Key, %Index
 
   _WebSocket.Debug -i2 SockOpen> $+ $sockname $+ ~Connection established

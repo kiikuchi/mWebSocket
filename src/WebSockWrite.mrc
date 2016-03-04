@@ -90,7 +90,7 @@ alias WebSockWrite {
       %BVar = $2
       %BVarUnset = $false
     }
-    else {
+    elseif ($0 == 2) {
       bset -t %BVar 1 $2-
     }
 
@@ -243,7 +243,7 @@ alias -l _WebSocket.Send {
   }
 }
 
-on $*:SOCKWRITE:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
+on $*:SOCKWRITE:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %State = $hget($sockname, SOCK_STATE)
 
   ;; Check for errors

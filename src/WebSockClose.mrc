@@ -76,7 +76,7 @@ alias -l _WebSocket.Cleanup {
   }
 }
 
-on $*:SOCKCLOSE:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
+on $*:SOCKCLOSE:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95)
 
   ;; Basic error checks

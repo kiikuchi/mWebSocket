@@ -309,7 +309,7 @@ alias WebSockDebug {
 
 ;; if the group is "on" the contained alias is used for outputting debug messages:
 ;; /_WebSocket.Debug -ewiNs [title~][msg]
-#_WebSocket_Debug off
+#_WebSocket_Debug on
 alias -l _WebSocket.Debug {
 
   ;; if the debug window isn't open, disable debugging
