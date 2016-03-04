@@ -17,7 +17,7 @@ mIRC v7.4x or AdiIRC v2.2
 
 Installing
 ----------
-1. Download `mWebSocket.xxxx.stable.mrc` from the root directly or `mWebSocket.xxxx.yyyy.mrc` from the /builds/ directory  
+1. Download `mWebSocket-vx.x.xxxx-stable.mrc` from the root directly or `mWebSocket-vx.x.xxxx-yyyy.mrc` from the /builds/ directory  
 2. In mIRC/AdiIRC, enter the following command in an editbox: `//load -rs $$sfile($mircdir, Load, Open)`  
 3. Navigate to and select the downloaded file  
 4. Click "Open"  
@@ -54,19 +54,19 @@ Commands
 
 **Switches**
 > `-c`  
-> &nbsp;&nbsp;The data should be sent as a CLOSE control-frame  
+> The data should be sent as a CLOSE frame  
 >  
 > `-p`  
-> The data should be sent as a PING control-frame  
+> The data should be sent as a PING frame  
 >  
 > `-P`  
-> The data should be sent as a PONG control-frame  
+> The data should be sent as a PONG frame  
 >  
 > `-b`  
-> The data should be sent as a BINARY data-frame  
+> The data should be sent as a BINARY frame  
 >  
 > `-t`  
-> The data should be sent as a TEXT control-frame (default)  
+> The data should be sent as a TEXT frame (default)  
 >  
 > `+t`  
 > The passed data is to be treated as plain-text
@@ -161,15 +161,11 @@ Identifiers
 > `StatusText`  
 > Returns the HTTP Status Text returned by the server  
 > Only applicatable after the HTTP response has been received  
->  
-> `Headers`  
-> Returns the total number of headers returned by the server response  
-> Only applictable after the HTTP response has been received  
 
 &nbsp;  
 &nbsp;  
 
-#### `$WebSock(name, [header,] n).Header`  
+#### `$WebSock(name, [header,] n).HttpHeader`  
 > Returns the specified header.  
 > Only applictable after the HTTP response has been received  
 
@@ -183,14 +179,23 @@ Identifiers
 > If `n` is `0` the total number of matching headers is returned  
 >  
 > `n` - Required  
-> Returns the nth header  
+> Returns the nth header.  
+> if a `[header]` name is not specified, the nth header name is returned
 > if `0` the total number of headers is returned  
 
 &nbsp;  
 &nbsp;  
 
 #### `$WebSockType`  
-> Returns the type of data recieved (1 for text, 2 for binary)  
+> Returns the frame-type recieved 
+> Only applicable from within the `CLOSING`(8), `PING`(9), `PONG`(10), AND `DATA`(1 for text or 2 for binary) events  
+
+&nbsp;  
+&nbsp;  
+
+
+#### `$WebSockTypeText`  
+> Returns the frame-type recieved as text: `CLOSE`, `PING`, `PONG`, `TEXT`, `BINARY`
 > Only applicable from within the `CLOSING`, `PING`, `PONG`, AND `DATA` events  
 
 &nbsp;  
@@ -247,6 +252,7 @@ Events
 #### Event: `INIT`
 > Raised when the socket connection has been established.  
 >
+> `$WebSock` can be used to retrieve the WebSock name  
 > `/WebSockHeader` can be used from within this event to set request headers  
   
 &nbsp;  
@@ -254,12 +260,16 @@ Events
   
 #### Event: `REQSEND`
 > Raise when the HTTP request has been sent and a server response is pending
+>
+> `$WebSock` can be used to retrieve the WebSock name  
 
 &nbsp;  
 &nbsp; 
 
 #### Event: `READY`
 > Raised when the HTTP handshake has successfully completed and the WebSocket is ready to send/recieve data  
+>
+> `$WebSock` can be used to retrieve the WebSock name  
 
 &nbsp;  
 &nbsp; 
@@ -267,7 +277,8 @@ Events
 #### Event: `DATA`
 > Raised when a DATA frame has been recieved
 >
-> `$WebSockType`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
+> `$WebSock` can be used to retrieve the WebSock name  
+> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
 
 &nbsp;  
 &nbsp; 
@@ -275,7 +286,8 @@ Events
 #### Event: `PING`
 > Raised when a PING frame has been recieved
 >
-> `$WebSockType`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
+> `$WebSock` can be used to retrieve the WebSock name  
+> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
 
 &nbsp;  
 &nbsp; 
@@ -283,7 +295,8 @@ Events
 #### Event: `PONG`
 > Raised when a PONG frame has been recieved
 >
-> `$WebSockType`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
+> `$WebSock` can be used to retrieve the WebSock name  
+> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
 
 &nbsp;  
 &nbsp; 
@@ -291,7 +304,8 @@ Events
 #### Event: `CLOSING`
 > Raised when a CLOSE frame has been recieved
 >
-> `$WebSockType`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
+> `$WebSock` can be used to retrieve the WebSock name  
+> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data 
 
 &nbsp;  
 &nbsp; 
@@ -300,7 +314,7 @@ Events
 > Raised when the remote host has closed the connection.  
 > The websocket will be destroyed after this event.
 >
-> A new websocket cannot be created from this event reusing the name.
+> A new websocket can not be created from this event reusing the name.
 
 &nbsp;  
 &nbsp; 
@@ -309,9 +323,9 @@ Events
 > Raised when an error occured durring socket communications.
 > The websocket will be destroyed after this event.
 >
-> A new websocket cannot be created from this event reusing the name.
->
 > `$WebSockErr` and `$WebSockErrMsg` can be used to access information about the error
+>
+> A new websocket can not be created from this event reusing the name.
 
 &nbsp;  
 &nbsp; 
@@ -319,7 +333,7 @@ Events
 #### Event: `FINISHED`
 > Raised after a websocket has been destroyed
 >
-> A new websocket CAN be created from this event reusing the name  
+> A new websocket **CAN** be created from this event reusing the name  
 
 &nbsp;  
 &nbsp;  
