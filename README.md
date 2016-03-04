@@ -180,14 +180,14 @@ Identifiers
 >  
 > `n` - Required  
 > Returns the nth header.  
-> if a `[header]` name is not specified, the nth header name is returned
+> if a `[header]` name is not specified, the nth header name is returned  
 > if `0` the total number of headers is returned  
 
 &nbsp;  
 &nbsp;  
 
 #### `$WebSockType`  
-> Returns the frame-type recieved 
+> Returns the frame-type recieved  
 > Only applicable from within the `CLOSING`(8), `PING`(9), `PONG`(10), AND `DATA`(1 for text or 2 for binary) events  
 
 &nbsp;  
