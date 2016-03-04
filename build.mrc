@@ -81,7 +81,7 @@ alias Build_mWebSocket {
       echo -sg $+($chr(3), 10[, Build>Path, ], $chr(15), : %Path)
       echo -sg $+($chr(3), 03[, Build>Files, ], $chr(15), :) Appending source files
 
-      window -ink0 @BuildmWebSocket
+      window -h0ink0 @BuildmWebSocket
       clear @BuildmWebSocket
       var %added = $findfile($scriptdirsrc\, WebSock*.mrc, 0, 1, loadbuf @BuildmWebSocket $qt($1-))
 
