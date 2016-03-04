@@ -79,7 +79,7 @@ alias WebSockWrite {
       %TypeText = PONG
     }
     elseif (b isincs %FrameSwitch) {
-      %Code = 1
+      %Code = 2
       %TypeText = BINARY
     }
 
