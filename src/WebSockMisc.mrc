@@ -233,13 +233,13 @@ alias WebSockText {
   if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!\d*$)([^?*-][^?*-]*)$/)) {
     return
   }
-  
+
   ;; clear the bvar we need to read data into
   bunset &_WebSocket_EventFrameData
-  
+
   ;; retrieve the frame data
   if ($hget(_WebSocket_ $+ $regml(event, 1), WSFRAME_DATA, &_WebSocket_EventFrameData)) {
-  
+
     ;; return the first 3500 bytes
     return $bvar(&_WebSocket_EventFrameData, 1, 3500).text
   }
