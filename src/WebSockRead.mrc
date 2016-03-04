@@ -34,7 +34,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         if (%HeadData) {
 
           ;; if the status line has not been read
-          if (!$hget($sockname, HTTPRESP_StatusCode)) {
+          if (!$hget($sockname, HTTPRESP_StatusCode).item) {
 
             ;; Check the line's format, and if its valid store required portions of it
             if ($regex(%HeadData, /^(HTTP\/(?:0\.9|1\.[01])) (\d+)((?:\s.*)?)[\r\n]*$/i)) {
@@ -65,7 +65,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         }
 
         ;; If the HTTP version is not HTTP/1.1
-        elseif ($hget($sockname, HTTPRESP_HttpVer) !== HTTP/1.1) {
+        elseif ($hget($sockname, HTTPRESP_HttpVersion) !== HTTP/1.1) {
           %Error = HTTP_ERROR Unacceptable HTTP version: $v1
         }
 
@@ -96,10 +96,10 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           ;; Digest the key that was sent to the server
           bunset &SecWebSockAccept
           bset &SecWebSockAccept 1 $regsubex($sha1($hget($sockname, HTTPREQ_SecWebSocketKey) $+ 258EAFA5-E914-47DA-95CA-C5AB0DC85B11), /(..)/g, $base(\t, 16, 10) $+ $chr(32))
-          noop $encode(&WebSockKeyDigest, mb)
+          noop $encode(&SecWebSockAccept, mb)
 
           ;; ERROR - The response security key does not match the digest of the sent key
-          if (%SecAccept !== $bvar(&WebSockKeyDigest, 1-).text) {
+          if (%SecAccept !== $bvar(&SecWebSockAccept, 1-).text) {
             %Error = HTTP_ERROR Sec-WebSocket-Accept header value does not match digested key
           }
 
@@ -128,13 +128,15 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
   ;;    Frame processing    ;;
   ;;------------------------;;
   elseif ($hget($sockname, SOCK_STATE) == 4) {
+    bunset &_WebSocket_ReadBuffer &_WebSocket_RecvData &_WebSocket_FrameData
+  
 
     ;; read all data in socket buffer
-    sockread $sock($sockname).rq &RecvData
+    sockread $sock($sockname).rq &_WebSocket_RecvData
 
     ;; append data to what is is the pending frame buffer
-    noop $hget($sockname, WSFRAME_PENDING, &Buffer)
-    bcopy -c &Buffer $calc($bvar(&Buffer, 0) + 1) &RecvData 1 -1
+    noop $hget($sockname, WSFRAME_PENDING, &_WebSocket_ReadBuffer)
+    bcopy -c &_WebSocket_ReadBuffer $calc($bvar(&_WebSocket_ReadBuffer, 0) + 1) &_WebSocket_RecvData 1 -1
 
     ;; cleanup before processing
     bunset &RecvData
@@ -142,11 +144,11 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
     hdel $sockname WSFRAME_TYPE
 
     ;; Begin looping over the buffer data to seperate frames
-    while ($bvar(&Buffer, 0) >= 2) {
+    while ($bvar(&_WebSocket_ReadBuffer, 0) >= 2) {
 
-      %HeadData = $bvar(&RecvData, 1, 1)
+      %HeadData = $bvar(&_WebSocket_ReadBuffer, 1, 1)
       %HeadSize = 2
-      %FragSize = $base(&RecvData, 2, 1)
+      %FragSize = $base(&_WebSocket_ReadBuffer, 2, 1)
 
       ;; ERROR - CLOSE frame previously recieved; subsequent frames should not have been sent
       if ($hget($sockname, SOCK_STATE) == 5) {
@@ -187,7 +189,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
 
       ;; ERROR - Frame's data length would overflow a 32bit integer
       ;;   the largest mIRC can safely handle
-      elseif (%FragSize == 127 && $bvar(&RecvData, 0) >= 6 && $bvar(&RecvData, 3).nlong !== 0) {
+      elseif (%FragSize == 127 && $bvar(&_WebSocket_ReadBuffer, 0) >= 6 && $bvar(&_WebSocket_ReadBuffer, 3).nlong !== 0) {
         %Error = FRAME_ERROR Data size would overflow an int32
       }
       else {
@@ -195,51 +197,50 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         ;; If the 2nd octlet is equal to 126, the fragment size is the following 2 octlets
         ;;   Make sure the entire frame head has been recieved, and update size variables
         if (%FragSize == 126) {
-          if ($bvar(&RecvData, 0) < 4) {
+          if ($bvar(&_WebSocket_ReadBuffer, 0) < 4) {
             break
           }
           %HeadSize = 4
-          %FragSize = $bvar(&RecvData, 3, 2).nword
+          %FragSize = $bvar(&_WebSocket_ReadBuffer, 3, 2).nword
         }
 
         ;; If the 2nd octlet is equal to 127, the fragment size the the following 8 octlets
         ;;   Make sure the entire frame head has been recieved, and update size variables
         elseif (%DataSize == 127) {
-          if ($bvar(&RecvData, 0) < 10) {
+          if ($bvar(&_WebSocket_ReadBuffer, 0) < 10) {
             break
           }
           %HeadSize = 10
-          %FragSize = $bvar(&RecvData, 7).nlong
+          %FragSize = $bvar(&_WebSocket_ReadBuffer, 7).nlong
         }
 
         ;; Check to verify the entire frame has been read
-        if ($bvar(&RecvData, 0) < $calc(%HeadSize + %FragSize)) {
+        if ($bvar(&_WebSocket_ReadBuffer, 0) < $calc(%HeadSize + %FragSize)) {
           break
         }
 
         ;; Retrieve previously stored fragment data, then remove it from the hashtable
-        bunset &FrameData
-        noop $hget($sockname, WSFRAME_Fragment, &FrameData)
+        noop $hget($sockname, WSFRAME_Fragment, &_WebSocket_FrameData)
         hdel $sockname WSFRAME_Fragment
         hdel $sockname WSFRAME_FragmentType
 
         ;; Copy the new Frame's data to the stored frame parts, then remove the frame from the received buffer
-        bcopy -c &FrameData $calc($bvar(&FrameData, 0) + 1) &RecvData $calc(%HeadSize + 1) %FragSize
-        if ($calc(%HeadSize + %FragSize) == $bvar(&RecvData, 0)) {
-          bunset &RecvData
+        bcopy -c &_WebSocket_FrameData $calc($bvar(&_WebSocket_FrameData, 0) + 1) &_WebSocket_ReadBuffer $calc(%HeadSize + 1) %FragSize
+        if ($calc(%HeadSize + %FragSize) == $bvar(&_WebSocket_ReadBuffer, 0)) {
+          bunset &_WebSocket_ReadBuffer
         }
         else {
-          bcopy -c &RecvData 1 &RecvData $calc($v1 +1) -1
+          bcopy -c &_WebSocket_ReadBuffer 1 &_WebSocket_ReadBuffer $calc($v1 +1) -1
         }
 
-        hadd -mb WSFRAME_DATA &FrameData
-        hadd -mb WSFRAME_TYPE $calc(%HeadData % 128)
+        hadd -mb WSFRAME_DATA &_WebSocket_FrameData
+        hadd -m WSFRAME_TYPE $calc(%HeadData % 128)
 
         ;; Control-Frame (CLOSE)
         if (%HeadData == 136) {
 
           ;; ERROR - if there's data following the close frame, the connection is errorous
-          if ($bvar(&RecvData, 0)) {
+          if ($bvar(&_WebSocket_ReadBuffer, 0)) {
             %Error = %Error = FRAME_ERROR Data recieved after a CLOSE frame has been recieved.
           }
 
@@ -267,7 +268,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         elseif (%HeadData == 137) {
           _WebSocket.Debug -i %Name $+ >FRAME:PING~Ping frame received.
           .signal -n WebSocket_PING_ $+ %Name
-          WebSockWrite -P $sockname &FrameData
+          WebSockWrite -P $sockname &_WebSocket_FrameData
         }
 
         ;; Control-Frame (PONG)
@@ -278,7 +279,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
 
         ;; if the frame is not a final-fragment, store the data for the next frame read
         else if (!$isbit(%HeadData, 8)) {
-          hadd -mb $sockname WSFRAME_Fragment &FrameData
+          hadd -mb $sockname WSFRAME_Fragment &_WebSocket_FrameData
           hadd -m $sockname  WSFRAME_FragmentType $calc(%HeadData % 128)
         }
 
@@ -301,8 +302,8 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
 
     ;; If no errors occured, update the buffer
     if (!%Error) {
-      if ($bvar(&Buffer, 0)) {
-        hadd -mb $sockname WSFRAME_PENDING &Buffer
+      if ($bvar(&_WebSocket_ReadBuffer, 0)) {
+        hadd -mb $sockname WSFRAME_PENDING &_WebSocket_ReadBuffer
       }
       elseif ($hget($sockname, WSFRAME_PENDING).item) {
         hdel $sockname WSFRAME_PENDING

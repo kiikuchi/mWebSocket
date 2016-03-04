@@ -160,7 +160,7 @@ alias -l _WebSocket.Send {
   elseif (!$hget($1) || !$len($hget($1, SOCK_STATE))) {
     %Error = INTERNAL_ERROR State lost
   }
-  elseif ($hget($1, SOCK_STATE) !== 3) {
+  elseif ($hget($1, SOCK_STATE) === 3) {
     %Error = INTERNAL_ERROR State doesn't match data sending
   }
 

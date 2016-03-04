@@ -118,7 +118,7 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
   elseif (!$len($hget($sockname, HTTPREQ_HOST))) {
     %Error = INTERNAL_ERROR State table does not contain host name
   }
-  elseif (!$len($hget($Sockname, HTTPREQ_RES)) {
+  elseif (!$len($hget($Sockname, HTTPREQ_RES))) {
     %Error = INTERNAL_ERROR State table does not contain a resource to request
   }
   else {
@@ -133,7 +133,7 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
     ;; Initial Request: Resource request and required Headers
     hadd -m $sockname HTTPREQ_SecWebSocketKey $_WebSocket.SecKey
     bunset &HTTPREQ
-    _WebSocket.BAdd &HTTPREQ GET $hget($sockname, HTTPREQ_RESOURCE) HTTP/1.1
+    _WebSocket.BAdd &HTTPREQ GET $hget($sockname, HTTPREQ_RES) HTTP/1.1
     _WebSocket.BAdd &HTTPREQ Host: $hget($sockname, HTTPREQ_HOST)
     _WebSocket.BAdd &HTTPREQ Connection: upgrade
     _WebSocket.BAdd &HTTPREQ Upgrade: websocket

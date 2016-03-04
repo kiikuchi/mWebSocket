@@ -7,10 +7,10 @@ alias WebSock {
 
   ;; Deduce the name to use
   if (!$0) {
-    if ($event !== signal && !$regex($signal, ^WebSocket_[A-Z]+_(?!-)(?!\d*$)(.*)$)) {
+    if ($event !== signal && !$regex(name, $signal, ^WebSocket_[A-Z]+_(?!-)(?!\d*$)(.*)$)) {
       return
     }
-    %Name = $regml(1)
+    %Name = $regml(name, 1)
   }
   elseif ($regex(name, $1, ^(?!-)(?!\d*$)(.*)$)) {
     %Name = $regml(name, 1)
@@ -79,7 +79,7 @@ alias WebSock {
 
   ;; $WebSock().Uri
   elseif ($prop == Uri) {
-    return $hget(%Sock, SOCK_URI))
+    return $hget(%Sock, HTTPREQ_URI))
   }
 
   ;; $WebSock().HttpVersion
