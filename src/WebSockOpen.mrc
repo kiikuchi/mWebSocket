@@ -131,8 +131,6 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
     bunset &SecWebSocketKey
 
     ;; Initial Request: Resource request and required Headers
-    hadd -m $sockname HTTPREQ_SecWebSocketKey $_WebSocket.SecKey
-    bunset &HTTPREQ
     _WebSocket.BAdd &HTTPREQ GET $hget($sockname, HTTPREQ_RES) HTTP/1.1
     _WebSocket.BAdd &HTTPREQ Host: $hget($sockname, HTTPREQ_HOST)
     _WebSocket.BAdd &HTTPREQ Connection: upgrade

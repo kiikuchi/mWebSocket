@@ -34,7 +34,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         if (%HeadData) {
 
           ;; if the status line has not been read
-          if (!$hget($sockname, HTTPRESP_StatusCode).item) {
+          if (!$len($hget($sockname, HTTPRESP_StatusCode))) {
 
             ;; Check the line's format, and if its valid store required portions of it
             if ($regex(%HeadData, /^(HTTP\/(?:0\.9|1\.[01])) (\d+)((?:\s.*)?)[\r\n]*$/i)) {
@@ -129,7 +129,6 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
   ;;------------------------;;
   elseif ($hget($sockname, SOCK_STATE) == 4) {
     bunset &_WebSocket_ReadBuffer &_WebSocket_RecvData &_WebSocket_FrameData
-  
 
     ;; read all data in socket buffer
     sockread $sock($sockname).rq &_WebSocket_RecvData
@@ -148,7 +147,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
 
       %HeadData = $bvar(&_WebSocket_ReadBuffer, 1, 1)
       %HeadSize = 2
-      %FragSize = $base(&_WebSocket_ReadBuffer, 2, 1)
+      %FragSize = $bvar(&_WebSocket_ReadBuffer, 2, 1)
 
       ;; ERROR - CLOSE frame previously recieved; subsequent frames should not have been sent
       if ($hget($sockname, SOCK_STATE) == 5) {
@@ -160,8 +159,8 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         %Error = FRAME_ERROR Frame used RSV bits
       }
 
-      ;; ERROR - Frame head indicates a fragmented(bit1 = 0) control-frame(bit5 = 1)
-      elseif (!$isbit(%Head, 8) && $isbit(%HeadData, 4)) {
+      ;; ERROR - Frame head indicates a fragmented(bit1 = 0) control-frame(bits5-8 = 8,9,10)
+      elseif (!$isbit(%HeadData, 8) && $calc(%HeadData % 128) isnum 8-10) {
         %Error = FRAME_ERROR Fregmented control frame
       }
 

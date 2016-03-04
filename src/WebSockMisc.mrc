@@ -7,13 +7,13 @@ alias WebSock {
 
   ;; Deduce the name to use
   if (!$0) {
-    if ($event !== signal && !$regex(name, $signal, ^WebSocket_[A-Z]+_(?!-)(?!\d*$)(.*)$)) {
+    if ($event !== signal && !$regex(NameFromSignal, $signal, /^WebSocket_[a-zA-z]+_(?!\d+$)([^?*-][^?*]*)$/)) {
       return
     }
-    %Name = $regml(name, 1)
+    %Name = $regml(NameFromSignal, 1)
   }
-  elseif ($regex(name, $1, ^(?!-)(?!\d*$)(.*)$)) {
-    %Name = $regml(name, 1)
+  elseif ($regex(Name, $1, ^(?!-)(?!\d*$)(.*)$)) {
+    %Name = $regml(Name, 1)
   }
   else {
     return
