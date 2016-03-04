@@ -1,6 +1,6 @@
 ;; /WebSockClose -f sockname
 alias WebSockClose {
-  var %Switches, %Error, %Name = $1, %Sock = WebSocket_ $+ %Name
+  var %Switches, %Error, %Name = $1, %Sock = _WebSocket_ $+ %Name
 
   if (-* iswm $1) {
     %Switches = $mid($1, 2-)
@@ -11,15 +11,15 @@ alias WebSockClose {
   if ($regex(%Switches, ([^f]))) {
     %Error = Unknown switch specified: $regml(1)
   }
-  elseif (%Switches === ff) {
-    %Error = Duplicate switch specified: f
+  elseif ($regex(%Switches, /([f]).*\1/)) {
+    %Error = Duplicate switch specified: $regml(1)
   }
   elseif ($0 > 1) {
     %Error = Excessive parameters
   }
 
   ;; validate sockname
-  elseif (!$regex($1, ^(?!-?\d+$).+$)) {
+  elseif (!$regex($1, /^(?!\d+$)[^?*-][^?*]*$/)) {
     %Error = Invalid websocket name
   }
   elseif (!$sock(%Sock)) {
@@ -47,7 +47,7 @@ alias WebSockClose {
 
   ;; send close-frame
   else {
-    WebSockWrite -c %Sock
+    WebSockWrite -c $1
   }
 
   :error
@@ -68,7 +68,7 @@ alias -l _WebSocket.Cleanup {
   if ($hget($1)) hfree -w $1
 
   ;; cleanup timer
-  .timerWebSocket_Timeout_ $+ %Name off
+  .timer_WebSocket_Timeout_ $+ %Name off
 
   ;; Raise finished event
   if ($show) {
@@ -76,7 +76,7 @@ alias -l _WebSocket.Cleanup {
   }
 }
 
-on $*:SOCKCLOSE:/^WebSocket_[^\d?*][^?*]*$/:{
+on $*:SOCKCLOSE:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95)
 
   ;; Basic error checks
@@ -97,9 +97,8 @@ on $*:SOCKCLOSE:/^WebSocket_[^\d?*][^?*]*$/:{
   %Error = $iif($error, MIRC_ERROR $v1, %Error)
   if (%Error) {
     reseterror
-    hadd -m $sockname ERROR %Error
     _WebSocket.Debug -e %Name $+ >SOCKCLOSE~ $+ %Error
-    .signal -n WebSocket_ERROR_ $+ %Name
+    _WebSocket.RaiseError %Name %Error
   }
 
   ;; otherwise, report successful close

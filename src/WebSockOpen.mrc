@@ -29,7 +29,7 @@ alias WebSockOpen {
     %Error = Invalid URL specified
   }
   else {
-    %Sock = WebSocket_ $+ $1
+    %Sock = _WebSocket_ $+ $1
     %Host = $regml(uri, 2)
 
     ;; Cleanup after a non-existant socket just to be safe
@@ -70,7 +70,7 @@ alias WebSockOpen {
     hadd -m %Sock HTTPREQ_HOST %Host $+ $iif((%Ssl && %Port !== 443) || (!%Ssl && %Port !== 80), : $+ %Port)
 
     ;; Start timeout timer
-    $+(.timer, WebSocket_Timeout_, $1) -oi 1 $iif($3, $v1, 300) _WebSocket.ConnectTimeout %Name
+    $+(.timer, _WebSocket_Timeout_, $1) -oi 1 $iif($3, $v1, 300) _WebSocket.ConnectTimeout %Name
 
     ;; Begin socket connection and output debug message
     sockopen $iif(%ssl, -e) %sock %host %port
@@ -96,11 +96,10 @@ alias -l _WebSocket.ConnectTimeout {
 
   ;; output debug message, raise error event, cleanup
   _WebSocket.Debug -e $1 $+ >TIMEOUT Connection timed out
-  .signal -n WebSocket_Error_ $+ $1 $1 SOCK_ERROR Connection timeout
-  _WebSocket.Cleanup WebSocket_ $+ $1
+  _WebSocket.RaiseError $1 SOCK_ERROR Connection timout
 }
 
-on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
+on $*:SOCKOPEN:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %Key, %Index
 
   _WebSocket.Debug -i2 SockOpen> $+ $sockname $+ ~Connection established
@@ -125,35 +124,37 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
     _WebSocket.Debug -i SockOpen> $+ %name $+ ~Preparing request head
 
     ;; Generate a Sec-WebSocket-Key
-    bset &SecWebSocketKey 1 $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255)
-    noop $encode(&SecWebSocketKey, bm)
-    hadd -mb $sockname HTTPREQ_SecWebSocketKey &SecWebSocketKey
-    bunset &SecWebSocketKey
+    bset &_WebSocket_SecWebSocketKey 1 $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255) $r(1,255)
+    noop $encode(&_WebSocket_SecWebSocketKey, bm)
+    hadd -mb $sockname HTTPREQ_SecWebSocketKey &_WebSocket_SecWebSocketKey
+    bunset &_WebSocket_SecWebSocketKey
 
     ;; Initial Request: Resource request and required Headers
-    _WebSocket.BAdd &HTTPREQ GET $hget($sockname, HTTPREQ_RES) HTTP/1.1
-    _WebSocket.BAdd &HTTPREQ Host: $hget($sockname, HTTPREQ_HOST)
-    _WebSocket.BAdd &HTTPREQ Connection: upgrade
-    _WebSocket.BAdd &HTTPREQ Upgrade: websocket
-    _WebSocket.BAdd &HTTPREQ Sec-WebSocket-Version: 13
-    _WebSocket.BAdd &HTTPREQ Sec-WebSocket-Key: $hget($sockname, HTTPREQ_SecWebSocketKey)
+    bunset &_WebSocket_HttpReq
+    _WebSocket.BAdd &_WebSocket_HttpReq GET $hget($sockname, HTTPREQ_RES) HTTP/1.1
+    _WebSocket.BAdd &_WebSocket_HttpReq Host: $hget($sockname, HTTPREQ_HOST)
+    _WebSocket.BAdd &_WebSocket_HttpReq Connection: upgrade
+    _WebSocket.BAdd &_WebSocket_HttpReq Upgrade: websocket
+    _WebSocket.BAdd &_WebSocket_HttpReq Sec-WebSocket-Version: 13
+    _WebSocket.BAdd &_WebSocket_HttpReq Sec-WebSocket-Key: $hget($sockname, HTTPREQ_SecWebSocketKey)
 
     ;; Raise init event so scripts can build header list
-    .signal -n WebSocket_INIT_ $+ %Name %Name
+    .signal -n WebSocket_INIT_ $+ %Name
 
     ;; Loop over headers, adding them to the request
     %Index = 1
     while ($hfind($sockname, /^HTTPREQ_HEADER\d+_([^\s]+)$/, %Index, r)) {
-      _WebSocket.BAdd &HTTPREQ $regml(1) $hget($sockname, $v1)
+      _WebSocket.BAdd &_WebSocket_HttpReq $regml(1) $hget($sockname, $v1)
       inc %Index
     }
 
-    ;; Finalize the request, store the request, and update state variable
-    _WebSocket.BAdd &HTTPREQ
-    hadd -mb $sockname HTTPREQ_HEAD &HTTPREQ
-    hadd -m $sockname SOCK_STATE 2
+    ;; Finalize the request head and store it
+    _WebSocket.BAdd &_WebSocket_HttpReq
+    hadd -mb $sockname HTTPREQ_HEAD &_WebSocket_HttpReq
+    bunset &_WebSocket_HttpReq
 
-    ;; Output debug message and begin sending the request
+    ;; update state variable, output debug message and begin sending the request
+    hadd -m $sockname SOCK_STATE 2
     _WebSocket.Debug -i SockOpen> $+ %Name $+ ~Sending HTTP request
     _WebSocket.Send $sockname
   }
@@ -167,8 +168,6 @@ on $*:SOCKOPEN:/^WebSocket_[^\d?*][^?*]*$/:{
 
     ;; Log error, raise error event, cleanup socket
     _WebSocket.Debug -e SockOpen> $+ %Name $+ ~ $+ %Error
-    hadd -m $sockname ERROR %Error
-    .signal -n WebSocket_ERROR_ $+ %Name %Name %Error
-    _WebSocket.Cleanup $sockname
+    _WebSocket.RaiseError %Name %Error
   }
 }

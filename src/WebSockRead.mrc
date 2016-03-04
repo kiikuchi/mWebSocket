@@ -1,4 +1,5 @@
-on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
+
+on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %FragSize
 
   ;; Basic Error checks
@@ -37,7 +38,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           if (!$len($hget($sockname, HTTPRESP_StatusCode))) {
 
             ;; Check the line's format, and if its valid store required portions of it
-            if ($regex(%HeadData, /^(HTTP\/(?:0\.9|1\.[01])) (\d+)((?:\s.*)?)[\r\n]*$/i)) {
+            if ($regex(%HeadData, /^HTTP\/(0\.9|1\.[01]) (\d+)((?:\s.*)?)[\r\n]*$/i)) {
               hadd -m $sockname HTTPRESP_HttpVersion $regml(1)
               hadd -m $sockname HTTPRESP_StatusCode $regml(2)
               hadd -m $sockname HTTPRESP_StatusText $iif($regml(3), $v1, _NONE_)
@@ -94,19 +95,19 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           %SecAccept = $hget($sockname, $v1)
 
           ;; Digest the key that was sent to the server
-          bunset &SecWebSockAccept
-          bset &SecWebSockAccept 1 $regsubex($sha1($hget($sockname, HTTPREQ_SecWebSocketKey) $+ 258EAFA5-E914-47DA-95CA-C5AB0DC85B11), /(..)/g, $base(\t, 16, 10) $+ $chr(32))
-          noop $encode(&SecWebSockAccept, mb)
+          bunset &_WebSocket_SecWebSockAccept
+          bset &_WebSocket_SecWebSockAccept 1 $regsubex($sha1($hget($sockname, HTTPREQ_SecWebSocketKey) $+ 258EAFA5-E914-47DA-95CA-C5AB0DC85B11), /(..)/g, $base(\t, 16, 10) $+ $chr(32))
+          noop $encode(&_WebSocket_SecWebSockAccept, mb)
 
           ;; ERROR - The response security key does not match the digest of the sent key
-          if (%SecAccept !== $bvar(&SecWebSockAccept, 1-).text) {
+          if (%SecAccept !== $bvar(&_WebSocket_SecWebSockAccept, 1-).text) {
             %Error = HTTP_ERROR Sec-WebSocket-Accept header value does not match digested key
           }
 
           ;; SUCCESS! - Head received and contains approiate data
           ;;   Stop timeout timer, update state variable, output debug message, raise event
           else {
-            $+(.timer, WebSocket_Timeout_, %Name) off
+            $+(.timer, _WebSocket_Timeout_, %Name) off
             hadd -m $sockname SOCK_STATE 4
             _WebSocket.Debug -s %Name $+ >HANDSHAKE~Handshake complete; ready to send and recieve frames!
             .signal -n WebSocket_READY_ $+ %Name
@@ -128,17 +129,21 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
   ;;    Frame processing    ;;
   ;;------------------------;;
   elseif ($hget($sockname, SOCK_STATE) == 4) {
-    bunset &_WebSocket_ReadBuffer &_WebSocket_RecvData &_WebSocket_FrameData
+    bunset &_WebSocket_ReadBuffer &_WebSocket_RecvData
 
     ;; read all data in socket buffer
     sockread $sock($sockname).rq &_WebSocket_RecvData
 
-    ;; append data to what is is the pending frame buffer
-    noop $hget($sockname, WSFRAME_PENDING, &_WebSocket_ReadBuffer)
-    bcopy -c &_WebSocket_ReadBuffer $calc($bvar(&_WebSocket_ReadBuffer, 0) + 1) &_WebSocket_RecvData 1 -1
+    ;; append the newly read data to any remaining data from the previous read
+    if ($hget($sockname, WSFRAME_PENDING, &_WebSocket_ReadBuffer)) {
+      bcopy -c &_WebSocket_ReadBuffer $calc($bvar(&_WebSocket_ReadBuffer, 0) + 1) &_WebSocket_RecvData 1 -1
+    }
+    else {
+      bcopy -c &_WebSocket_ReadBuffer 1 &_WebSocket_RecvData 1 -1
+    }
+    bunset &_WebSocket_RecvData
 
-    ;; cleanup before processing
-    bunset &RecvData
+    ;; cleanup before further processing
     hdel $sockname WSFRAME_DATA
     hdel $sockname WSFRAME_TYPE
 
@@ -203,7 +208,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           %FragSize = $bvar(&_WebSocket_ReadBuffer, 3, 2).nword
         }
 
-        ;; If the 2nd octlet is equal to 127, the fragment size the the following 8 octlets
+        ;; If the 2nd octlet is equal to 127, the fragment size is the following 8 octlets
         ;;   Make sure the entire frame head has been recieved, and update size variables
         elseif (%DataSize == 127) {
           if ($bvar(&_WebSocket_ReadBuffer, 0) < 10) {
@@ -219,11 +224,12 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         }
 
         ;; Retrieve previously stored fragment data, then remove it from the hashtable
+        bunset &_WebSocket_FrameData
         noop $hget($sockname, WSFRAME_Fragment, &_WebSocket_FrameData)
         hdel $sockname WSFRAME_Fragment
         hdel $sockname WSFRAME_FragmentType
 
-        ;; Copy the new Frame's data to the stored frame parts, then remove the frame from the received buffer
+        ;; Copy the newly read frame's data to any stored fragments parts, then remove the frame from the received buffer
         bcopy -c &_WebSocket_FrameData $calc($bvar(&_WebSocket_FrameData, 0) + 1) &_WebSocket_ReadBuffer $calc(%HeadSize + 1) %FragSize
         if ($calc(%HeadSize + %FragSize) == $bvar(&_WebSocket_ReadBuffer, 0)) {
           bunset &_WebSocket_ReadBuffer
@@ -241,7 +247,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         else {
           hdel $sockname WSFRAME_DATA
         }
-        
+
         ;; Store the frame type
         hadd -m $sockname WSFRAME_TYPE $calc(%HeadData % 128)
 
@@ -273,7 +279,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         }
 
         ;; Control-Frame (PING)
-        ;;   Output debug message, raise Ping event, queue pong frame
+        ;;   Output debug message, raise PING event, queue outgoing PONG frame
         elseif (%HeadData == 137) {
           _WebSocket.Debug -i %Name $+ >FRAME:PING~Ping frame received.
           .signal -n WebSocket_PING_ $+ %Name
@@ -281,6 +287,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         }
 
         ;; Control-Frame (PONG)
+        ;;  Output debug message and raise PONG event
         elseif (%HeadData == 138) {
           _WebSocket.Debug -i %Name $+ >FRAME:PING~Pong frame received.
           .signal -n WebSocket_PONG_ $+ %Name
@@ -329,8 +336,6 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
   if (%Error) {
     reseterror
     _WebSocket.Debug -e SockRead> $+ %Name $+ ~ $+ %Error
-    hadd -m $sockname ERROR %Error
-    .signal -n WebSocket_ERROR_ $+ %Name
-    _WebSocket.Cleanup $sockname
+    _WebSocket.RaiseError %Name %Error
   }
 }

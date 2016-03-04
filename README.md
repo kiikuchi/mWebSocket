@@ -195,7 +195,7 @@ Identifiers
 
 
 #### `$WebSockTypeText`  
-> Returns the frame-type recieved as text: `CLOSE`, `PING`, `PONG`, `TEXT`, `BINARY`
+> Returns the frame-type recieved as text: `CLOSE`, `PING`, `PONG`, `TEXT`, `BINARY`  
 > Only applicable from within the `CLOSING`, `PING`, `PONG`, AND `DATA` events  
 
 &nbsp;  
