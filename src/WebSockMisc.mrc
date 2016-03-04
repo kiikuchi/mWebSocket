@@ -7,7 +7,7 @@ alias WebSock {
 
   ;; Deduce the name to use
   if (!$0) {
-    if ($event !== signal && !$regex(NameFromSignal, $signal, /^WebSocket_[a-zA-z]+_(?!\d+$)([^?*-][^?*]*)$/)) {
+    if ($event !== signal || !$regex(NameFromSignal, $signal, /^WebSocket_[a-zA-z]+_(?!\d+$)([^?*-][^?*]*)$/)) {
       return
     }
     %Name = $regml(NameFromSignal, 1)
@@ -88,41 +88,38 @@ alias WebSock {
   }
 
   ;; $WebSock().HttpStatus
-  elseif ($prop == HttpStatus) {
+  elseif ($prop == StatusCode) {
     return $hget(%Sock, HTTPRESP_StatusCode)
   }
 
   ;; $WebSock().HttpStatusText
-  elseif ($prop == HttpStatusText) {
+  elseif ($prop == StatusText) {
     return $hget(%Sock, HTTPRESP_StatusText)
-  }
-
-  ;; $WebSock().Headers
-  elseif ($prop == Headers) {
-    return $hfind(%Sock, ^HTTPRESP_HEADER\d+_, 0, r)
   }
 
   ;; $WebSock().HttpHeader
   elseif ($prop == HttpHeader) {
-    if (!$hget(%Sock) || $0 < 2 || ($0 == 3 && ($3 !isnum 0- || . isin $3)) || $0 > 3) {
+    ;; validate inputs
+    if (!$hget(%Sock) || $0 < 2 || !$len($2) || $0 > 3 || ($0 == 3 && (!$len($3) || $3 !isnum 0- || . isin $3))) {
       return
     }
 
-    ;; $WebSock(name, header[, n]).HttpHeader
-    elseif ($0 == 3 || $2 !isnum 0- || . isin $2) {
-      %Header = $hfind(%Sock, ^HTTPRESP_HEADER\d+_\Q $+ $replacecs($2, \E, \Q\\E\E) $+ \E$, $iif($0 == 3, $v1, 1), r)
-      if (!%index) {
+    ;; $WebSock(Name, n).HttpHeader
+    elseif ($0 == 2 && . !isin $2) {
+      if (!$2) {
+        return $hfind(%Sock, /^HTTPRESP_HEADER\d+_/, 0, r)
+      }
+      return $gettok($hfind(%Sock, ^HTTPRESP_HEADER $+ $2 $+ _, 1, r), 3-, 95)
+    }
+
+    ;; $WebSock(Name, header, n).Httpheader
+    else {
+      %Index = $iif($0 == 3, $3, 1)
+      %Header = $hfind(%Sock, /^HTTPRESP_HEADER\d+_\Q $+ $replacecs($2, \E, \Q\\E\E) $+ \E$/, %Index, r)
+      if (!%Index) {
         return %Header
       }
       return $hget(%Sock, %Header)
-    }
-
-    ;; $WebSock(name, n).HttpHeader
-    elseif ($2) {
-      return $gettok($hfind(%Sock, ^HTTPRESP_HEADER $+ $2 $+ _, 1, r), 3-, 95)
-    }
-    else {
-      return $hfind(%Sock, ^HTTPRESP_HEADER\d+_, 0, r)
     }
   }
 }
@@ -166,16 +163,40 @@ alias WebSockHeader {
 ;; $WebSockType
 ;;   Returns the frame type
 alias WebSockType {
-  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!\d*$)([^?*-][^?*-]*)$/)) {
     return
   }
   return $hget(WebSocket_ $+ $regml(event, 1), WSFRAME_TYPE)
 }
 
+;; $WebSockTypeText
+;;   Returns the text equivialnt of the frame type
+alias WebSockTypeText {
+  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!\d*$)([^?*-][^?*-]*)$/)) {
+    return
+  }
+  var %type = $hget(WebSocket_ $+ $regml(event, 1), WSFRAME_TYPE)
+  if (%type == 1) {
+    return TEXT
+  }
+  elseif (%Type == 2) {
+    return BINARY
+  }
+  elseif (%TYPE == 8) {
+    return CLOSE
+  }
+  elseif (%Type == 9) {
+    return PING
+  }
+  elseif (%Type == 10) {
+    return PONG
+  }
+}
+
 ;; $WebSockText
 ;;   Returns the frame data as utf8 text
 alias WebSockText {
-  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!\d*$)([^?*-][^?*-]*)$/)) {
     return
   }
   bunset &_WebSockFrameData
@@ -187,7 +208,7 @@ alias WebSockText {
 ;; $WebSockData(&bvar)
 ;;   fills the specified bvar with the frame data
 alias WebSockData {
-  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!-)(?!\d*$)(.*)$)) {
+  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_(?:DATA|PING|PONG|CLOSING)_(?!\d*$)([^?*-][^?*-]*)$/)) {
     return
   }
   elseif ($0 == 1 && &?* !iswm $1 && $chr(32) isin $1) {
@@ -201,7 +222,7 @@ alias WebSockData {
 ;; $WebSockErr
 ;;   Returns the error that caused the error event to be raised
 alias WebSockErr {
-  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
+  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_ERROR_(?!\d*$)([^?*-][^?*-]*)$/)) {
     return
   }
   return $gettok($hget(WebSocket_ $+ $regml(event, 1), ERROR), 1, 32)
@@ -210,7 +231,7 @@ alias WebSockErr {
 ;; $WebSockErrMsg
 ;;   Returns the error msg that caused the error event to be raised
 alias WebSockErrMsg {
-  if ($isid || $event !== signal || !$regex(event, $signal, ^WebSocket_ERROR_(?!-)(?!\d*$)(.*)$)) {
+  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_ERROR_(?!\d*$)([^?*-][^?*-]*)$/)) {
     return
   }
   return $gettok($hget(WebSocket_ $+ $regml(event, 1), ERROR), 2-, 32)
@@ -315,4 +336,7 @@ on *:UNLOAD:{
   sockclose WebSocket_*
   hfree -w WebSocket_
   .timerWebSocket_TimeOut_* off
+  if ($Window(@WebSocketDebug)) {
+    close -@ @WebSocketDebug
+  }
 }

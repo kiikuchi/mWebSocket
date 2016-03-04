@@ -4,7 +4,7 @@ alias WebSockWrite {
     return
   }
 
-  var %FrameSwitch, %DataSwitch, %Name, %Sock, %Error, %Control = $false, %Code = 1, %Index, %Size, %MaskByte1, %MaskByte2, %MaskByte3, %MaskByte4
+  var %FrameSwitch, %DataSwitch, %Name, %Sock, %Error, %Control = $false, %Code = 1, %BVar, %Index, %Size, %MaskByte1, %MaskByte2, %MaskByte3, %MaskByte4
 
   ;; parse switches
   if ($left($1, 1) isin +-) {
@@ -37,7 +37,7 @@ alias WebSockWrite {
   }
 
   ;; validate socket state
-  elseif (!$hget(%Sock) || !$len($hget(%Sock $+ $1, SOCK_STATE))) {
+  elseif (!$hget(%Sock) || !$len($hget(%Sock, SOCK_STATE))) {
     hadd -m %Sock ERROR INTERNAL_ERROR State lost
     _WebSocket.Debug -e %Name $+ >STATE~State lost for %Name
     .signal -n WebSocket_Error_ $+ %Name
@@ -58,8 +58,8 @@ alias WebSockWrite {
   elseif (%FrameSwitch isincs bt && $0 == 1) {
     %Error = No data to send
   }
-  elseif (%DataSwitch !== t && &?* iswm $2 && $0 == 2 && (!$bvar($2, 0) || $bvar($2, 0) > 4294967295)) {
-    %Error = Specified bvar doesn't exist, is empty or exceeds 4gb
+  elseif (%DataSwitch !== t && &?* iswm $2 && $0 == 2 && $bvar($2, 0) > 4294967295) {
+    %Error = Specified bvar exceeds 4gb
   }
   else {
 
@@ -72,11 +72,11 @@ alias WebSockWrite {
       %Control = $true
       %Code = 9
     }
-    elseif (p isincs %FrameSwitch) {
+    elseif (P isincs %FrameSwitch) {
       %Control = $true
       %Code = 10
     }
-    elseif (b isincs %FrameSwitch {
+    elseif (b isincs %FrameSwitch) {
       %Code = 1
     }
 
@@ -187,7 +187,7 @@ alias -l _WebSocket.Send {
       if (%Size <= %Space) {
         sockwrite $1 &WebSocketSend
         hdel $1 HTTPREQ_HEAD
-        _WebSocket.Debug -i %Name $+ >HTTP_HEAD Entire head now added to send buffer
+        _WebSocket.Debug -i %Name $+ >HTTP_HEAD~Entire head now added to send buffer
       }
 
       ;; otherwise, add `%Space` bytes from the pending data to the write buffer
@@ -196,7 +196,7 @@ alias -l _WebSocket.Send {
         sockwrite -b $1 %Space &WebSocketSend
         bcopy -c &WebSocketSend 1 &WebSocketSend $calc(%Space +1) -1
         hadd -mb $1 HTTPREQ_HEAD &WebSocketSend
-        _WebSocket.Debug -i %Name $+ >HEAD_SEND Added %Space bytes of the head to the send buffer
+        _WebSocket.Debug -i %Name $+ >HEAD_SEND~Added %Space bytes of the head to the send buffer
       }
     }
   }
@@ -208,13 +208,13 @@ alias -l _WebSocket.Send {
     if (%Size <= %Space) {
       sockwrite $1 &WebSocketSend
       hdel $1 WSFRAME_Buffer
-      _WebSocket.Debug -i %Name $+ >FRAME_SEND All pending frame data now in send buffer
+      _WebSocket.Debug -i %Name $+ >FRAME_SEND~All pending frame data now in send buffer
     }
     else {
       sockwrite -b $1 %Space &WebSocketSend
       bcopy -c &WebSocketSend 1 &WebSocketSend $calc(%Space +1) -1
       hadd -mb $1 WSFRAME_Buffer &WebSocketSend
-      _WebSocket.Debug -i %Name $+ >FRAME_SEND add %Space bytes of frame data to send buffer
+      _WebSocket.Debug -i %Name $+ >FRAME_SEND~Added %Space bytes of frame data to send buffer
     }
   }
 

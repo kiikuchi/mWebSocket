@@ -52,7 +52,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           ;; If the status line has been received, assume the current line is a header
           ;;   Validate the header's format, get an index to store the header under, store it, and output debug message
           elseif ($regex(header, %HeadData, ^(\S+): (.*)$)) {
-            %Index = $calc($hfind($sockname, HTTPRESP_HEADER?*_*, w, 0) + 1)
+            %Index = $calc($hfind($sockname, HTTPRESP_HEADER?*_*, 0, w) + 1)
             hadd -m $sockname $+(HTTPRESP_HEADER, %Index, _, $regml(header, 1)) $regml(header, 2)
             _WebSocket.Debug -i %Name $+ >HEADER~Header Received: $regml(header, 1) $+ : $regml(header, 2)
           }
@@ -232,15 +232,25 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
           bcopy -c &_WebSocket_ReadBuffer 1 &_WebSocket_ReadBuffer $calc($v1 +1) -1
         }
 
-        hadd -mb WSFRAME_DATA &_WebSocket_FrameData
-        hadd -m WSFRAME_TYPE $calc(%HeadData % 128)
+        ;; if there's frame data, store it for use with events
+        if ($bvar(&_WebSocket_FrameData, 0)) {
+          hadd -mb $sockname WSFRAME_DATA &_WebSocket_FrameData
+        }
+
+        ;; otherwise delete the frame data entry
+        else {
+          hdel $sockname WSFRAME_DATA
+        }
+        
+        ;; Store the frame type
+        hadd -m $sockname WSFRAME_TYPE $calc(%HeadData % 128)
 
         ;; Control-Frame (CLOSE)
         if (%HeadData == 136) {
 
           ;; ERROR - if there's data following the close frame, the connection is errorous
           if ($bvar(&_WebSocket_ReadBuffer, 0)) {
-            %Error = %Error = FRAME_ERROR Data recieved after a CLOSE frame has been recieved.
+            %Error = FRAME_ERROR Data recieved after a CLOSE frame has been recieved.
           }
 
           ;; If the client sent a close frame and the server responded:
@@ -257,7 +267,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
             _WebSocket.Debug -i %Name $+ >FRAME:CLOSE~Close frame received.
             .signal -n WebSocket_CLOSING_ $+ %Name %Name
             hadd -m $sockname SOCK_STATE 5
-            WebSockClose $sockname
+            WebSockClose %Name
           }
           break
         }
@@ -267,7 +277,7 @@ on $*:SOCKREAD:/^WebSocket_[^?*]+$/:{
         elseif (%HeadData == 137) {
           _WebSocket.Debug -i %Name $+ >FRAME:PING~Ping frame received.
           .signal -n WebSocket_PING_ $+ %Name
-          WebSockWrite -P $sockname &_WebSocket_FrameData
+          WebSockWrite -P %Name &_WebSocket_FrameData
         }
 
         ;; Control-Frame (PONG)
