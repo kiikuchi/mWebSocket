@@ -3,7 +3,7 @@ alias WebSockClose {
   var %Switches, %Error, %Name = $1, %Sock = _WebSocket_ $+ %Name
 
   if (-* iswm $1) {
-    %Switches = $mid($1, 2-)
+    %Switches = $mid($1, 2)
     tokenize 32 $2-
   }
 
@@ -64,8 +64,12 @@ alias -l _WebSocket.Cleanup {
   var %Name = $gettok($1, 2-, 95)
 
   ;; cleanup sock and hashtable
-  if ($sock($1)) sockclose $1
-  if ($hget($1)) hfree -w $1
+  if ($sock($1)) {
+    sockclose $1
+  }
+  if ($hget($1)) {
+    hfree -w $1
+  }
 
   ;; cleanup timer
   .timer_WebSocket_Timeout_ $+ %Name off

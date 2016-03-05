@@ -1,4 +1,3 @@
-
 on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %FragSize
 
@@ -39,9 +38,9 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
 
             ;; Check the line's format, and if its valid store required portions of it
             if ($regex(%HeadData, /^HTTP\/(0\.9|1\.[01]) (\d+)((?:\s.*)?)[\r\n]*$/i)) {
-              hadd -m $sockname HTTPRESP_HttpVersion $regml(1)
-              hadd -m $sockname HTTPRESP_StatusCode $regml(2)
-              hadd -m $sockname HTTPRESP_StatusText $iif($regml(3), $v1, _NONE_)
+              hadd $sockname HTTPRESP_HttpVersion $regml(1)
+              hadd $sockname HTTPRESP_StatusCode $regml(2)
+              hadd $sockname HTTPRESP_StatusText $iif($regml(3), $v1, _NONE_)
             }
 
             ;; otherwise, store error and exit looping
@@ -54,7 +53,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
           ;;   Validate the header's format, get an index to store the header under, store it, and output debug message
           elseif ($regex(header, %HeadData, ^(\S+): (.*)$)) {
             %Index = $calc($hfind($sockname, HTTPRESP_HEADER?*_*, 0, w) + 1)
-            hadd -m $sockname $+(HTTPRESP_HEADER, %Index, _, $regml(header, 1)) $regml(header, 2)
+            hadd $sockname $+(HTTPRESP_HEADER, %Index, _, $regml(header, 1)) $regml(header, 2)
             _WebSocket.Debug -i %Name $+ >HEADER~Header Received: $regml(header, 1) $+ : $regml(header, 2)
           }
 
@@ -95,8 +94,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
           %SecAccept = $hget($sockname, $v1)
 
           ;; Digest the key that was sent to the server
-          bunset &_WebSocket_SecWebSockAccept
-          bset &_WebSocket_SecWebSockAccept 1 $regsubex($sha1($hget($sockname, HTTPREQ_SecWebSocketKey) $+ 258EAFA5-E914-47DA-95CA-C5AB0DC85B11), /(..)/g, $base(\t, 16, 10) $+ $chr(32))
+          bset -c &_WebSocket_SecWebSockAccept 1 $regsubex($sha1($hget($sockname, HTTPREQ_SecWebSocketKey) $+ 258EAFA5-E914-47DA-95CA-C5AB0DC85B11), /(..)/g, $base(\t, 16, 10) $+ $chr(32))
           noop $encode(&_WebSocket_SecWebSockAccept, mb)
 
           ;; ERROR - The response security key does not match the digest of the sent key
@@ -108,7 +106,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
           ;;   Stop timeout timer, update state variable, output debug message, raise event
           else {
             $+(.timer, _WebSocket_Timeout_, %Name) off
-            hadd -m $sockname SOCK_STATE 4
+            hadd $sockname SOCK_STATE 4
             _WebSocket.Debug -s %Name $+ >HANDSHAKE~Handshake complete; ready to send and recieve frames!
             .signal -n WebSocket_READY_ $+ %Name
           }
@@ -272,7 +270,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
           else {
             _WebSocket.Debug -i %Name $+ >FRAME:CLOSE~Close frame received.
             .signal -n WebSocket_CLOSING_ $+ %Name %Name
-            hadd -m $sockname SOCK_STATE 5
+            hadd $sockname SOCK_STATE 5
             WebSockClose %Name
           }
           break
@@ -295,8 +293,8 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
 
         ;; if the frame is not a final-fragment, store the data for the next frame read
         else if (!$isbit(%HeadData, 8)) {
-          hadd -mb $sockname WSFRAME_Fragment &_WebSocket_FrameData
-          hadd -m $sockname  WSFRAME_FragmentType $calc(%HeadData % 128)
+          hadd -b $sockname WSFRAME_Fragment &_WebSocket_FrameData
+          hadd $sockname  WSFRAME_FragmentType $calc(%HeadData % 128)
         }
 
         ;; Data-Frame: TEXT(129) or BINARY(130)
@@ -319,7 +317,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
     ;; If no errors occured, update the buffer
     if (!%Error) {
       if ($bvar(&_WebSocket_ReadBuffer, 0)) {
-        hadd -mb $sockname WSFRAME_PENDING &_WebSocket_ReadBuffer
+        hadd -b $sockname WSFRAME_PENDING &_WebSocket_ReadBuffer
       }
       elseif ($hget($sockname, WSFRAME_PENDING).item) {
         hdel $sockname WSFRAME_PENDING

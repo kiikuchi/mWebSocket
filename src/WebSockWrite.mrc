@@ -9,8 +9,8 @@ alias WebSockWrite {
   ;; parse switches
   if ($left($1, 1) isin +-) {
     noop $regex($1, /^((?:-[^+]*)?)((?:\+.*)?)$/))
-    %FrameSwitch = $mid($regml(1), 2-)
-    %DataSwitch = $mid($regml(2), 2-)
+    %FrameSwitch = $mid($regml(1), 2)
+    %DataSwitch = $mid($regml(2), 2)
     tokenize 32 $2-
   }
 
