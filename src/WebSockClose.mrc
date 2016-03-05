@@ -68,7 +68,7 @@ alias -l _WebSocket.Cleanup {
     sockclose $1
   }
   if ($hget($1)) {
-    hfree -w $1
+    hfree $1
   }
 
   ;; cleanup timer
