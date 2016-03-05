@@ -34,6 +34,8 @@ alias Build_mWebSocket {
     %Build_mWebSocket_VersionMinor = 0
     %Build_mWebSocket_VersionBuild = 0
     noop $findfile($scriptdirbuilds, mWebSocket-v?*.?*.?*-????*.mrc, 0, 1, Build_mWebSocket_GetVersion $1-)
+
+
     if (M isincs %Switches) {
       inc %Build_mWebSocket_VersionMajor
       %Build_mWebSocket_VersionMinor = 0
@@ -55,6 +57,7 @@ alias Build_mWebSocket {
         %Error = Build version increase would exceed the 9999 build-version limit (consider increasing the minor-version)
         goto error
       }
+      %Build_mWebSocket_VersionMinor = $regsubex(%Build_mWebSocket_VersionMinor, 00?0?$, )
       %Build_mWebSocket_VersionBuild = $base(%Build_mWebSocket_VersionBuild, 10, 10, 4)
       %Build_mWebSocket_VersionBuild = $regsubex(%Build_mWebSocket_VersionBuild, 00?0?$, )
     }
