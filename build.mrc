@@ -114,6 +114,16 @@ alias Build_mWebSocket {
         savebuf @BuildmWebSocket $qt(%path)
         echo -sg $+($chr(3), 10[, Build>Save, ], $chr(15), :) Save successful
 
+        echo -sg $+($chr(3), 03[, Build>Version, ], $chr(15), :) Adding version alias
+        bset -tc &_build_mWebSockVer 1 $crlf $+ alias mWebSockVer
+        bset     &_build_mWebSockVer $calc($bvar(&_build_mWebSockVer, 0) +1) 32 123 13 10 32 32
+        bset -t  &_build_mWebSockVer $calc($bvar(&_build_mWebSockVer, 0) +1) return %Build_mWebSocket_VersionMajor
+        bset -t  &_build_mWebSockVer $calc($bvar(&_build_mWebSockVer, 0) +1) $left(%Build_mWebSocket_VersionMinor $+ 0000,4)
+        bset -t  &_build_mWebSockVer $calc($bvar(&_build_mWebSockVer, 0) +1) . $+ $left(%Build_mWebSocket_VersionBuild $+ 0000,4)
+        bset     &_build_mWebSockVer $calc($bvar(&_build_mWebSockVer, 0) +1) 13 10 125
+        bwrite $qt(%path) -1 -1 &_build_mWebSockVer
+        echo -sg $+($chr(3), 03[, Build>Version, ], $chr(15), :) Version alias added
+
         close -@ @BuildmWebSocket
         unset %Build_mWebSocket_Version*
 
