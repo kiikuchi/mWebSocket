@@ -1,5 +1,5 @@
 on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
-  var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %FragSize
+  var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %Header, %IsFinal, %RSVBits, %IsControl, %FrameType, %DataSize
 
   ;; Basic Error checks
   if ($sockerr) {
@@ -127,12 +127,13 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   ;;    Frame processing    ;;
   ;;------------------------;;
   elseif ($hget($sockname, SOCK_STATE) == 4) {
+
+    ;; cleanup before further processing
     bunset &_WebSocket_ReadBuffer &_WebSocket_RecvData
 
-    ;; read all data in socket buffer
+    ;; read all data in socket buffer and append the to any remaining data
+    ;; from a previous read
     sockread $sock($sockname).rq &_WebSocket_RecvData
-
-    ;; append the newly read data to any remaining data from the previous read
     if ($hget($sockname, WSFRAME_PENDING, &_WebSocket_ReadBuffer)) {
       bcopy -c &_WebSocket_ReadBuffer $calc($bvar(&_WebSocket_ReadBuffer, 0) + 1) &_WebSocket_RecvData 1 -1
     }
@@ -141,176 +142,187 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
     }
     bunset &_WebSocket_RecvData
 
-    ;; cleanup before further processing
-    hdel $sockname WSFRAME_DATA
-    hdel $sockname WSFRAME_TYPE
-
-    ;; Begin looping over the buffer data to seperate frames
+    ;; Begin looping over the buffer data in an attempt to seperate frames
     while ($bvar(&_WebSocket_ReadBuffer, 0) >= 2) {
 
-      %HeadData = $bvar(&_WebSocket_ReadBuffer, 1, 1)
-      %HeadSize = 2
-      %FragSize = $bvar(&_WebSocket_ReadBuffer, 2, 1)
+      ;; cleanup before processing each frame
+      hdel $sockname WSFRAME_DATA
+      hdel $sockname WSFRAME_TYPE
+      bunset &_WebSocket_FrameData
 
-      ;; ERROR - CLOSE frame previously recieved; subsequent frames should not have been sent
-      if ($hget($sockname, SOCK_STATE) == 5) {
-        %Error = FRAME_ERROR Frame recieved after a CLOSE frame has been recieved.
+      %HeadSize  = 2
+      %Header    = $bvar(&_WebSocket_ReadBuffer, 1, 1)
+      %IsFinal   = $isbit(%Header, 8)
+      %RSVBits   = $calc($isbit(%Header, 7) *4 + $isbit(%Header, 6) *2 + $isbit(%Header, 5))
+      %IsControl = $isbit(%header, 4)
+      %FrameType = $calc(%Header % 128 % 64 % 32 % 16)
+      %DataSize  = $bvar(&_WebSocket_ReadBuffer, 2, 1)
+
+
+      ;; Error: RSV bits in use
+      if (%RSVBits) {
+        %Error = FRAME_ERROR Extension reserved bits used without extension negociation
       }
 
-      ;; ERROR - Frame makes use of reserved bits (bit2, bit3, or bit4)
-      elseif ($isbit(%HeadData, 5) || $isbit(%HeadData, 6) || $isbit(%HeadData, 7)) {
-        %Error = FRAME_ERROR Frame used RSV bits
+      ;; Error: fragmented control frame
+      elseif (%IsControl && !%IsFinal) {
+        %Error = FRAME_ERROR Fragmented control frame received
       }
 
-      ;; ERROR - Frame head indicates a fragmented(bit1 = 0) control-frame(bits5-8 = 8,9,10)
-      elseif (!$isbit(%HeadData, 8) && $calc(%HeadData % 128) isnum 8-10) {
-        %Error = FRAME_ERROR Fregmented control frame
+      ;; Unknown Control frame
+      elseif (%IsControl && %FrameType !isnum 8-10) {
+        %Error = FRAME_ERROR Unkown CONTROL frame received( $+ %FrameType $+ )
       }
 
-      ;; ERROR - Frame head indicates a control-frame that isn't:
-      ;;   CLOSE(bit5-8 = 8), PING(bit5-8 = 9), or PONG(bit5-8 = 10)
-      elseif ($isbit(%HeadData, 4) && %HeadData !isnum 136-138) {
-        %Error = FRAME_ERROR Recieved unknown control-frame type
+      ;; Error: Unknown data frame
+      elseif (!%IsControl && %FrameType !isnum 0-2) {
+        %Error = FRAME_ERROR Unkown DATA frame received( %FrameType )
       }
 
-      ;; ERROR - Frame head indicates the frame is a data-type that isn't:
-      ;;   TEXT(bit5-8 = 1) or BINARY(bit5-8 = 2)
-      elseif (!$isbit(%HeadData, 4) && $calc(%HeadData % 128) !isnum 1-2) {
-        %Error = FRAME_ERROR Received unknown data-frame type
+      ;; Error: Masked data from server
+      elseif ($isbit(%DataSize, 8)) {
+        %Error = FRAME_ERROR Masked frame received
       }
 
-      ;; ERROR - Frame head indicates the data is masked(bit9 = 1)
-      elseif ($isbit(%FragSize, 8)) {
-        %Error = FRAME_ERROR Received masked frame from server
+      ;; Error: Control frame larger than 127 bytes
+      elseif (%IsControl && %DataSize > 125) {
+        %Error = FRAME_ERROR Control frame received larger than 127 bytes
       }
 
-      ;; ERROR - Frame indicates its data-type is not that of the previously received frame fragment
-      elseif (!$isBit(%HeadData, 4) && $hget($sockname, WSFRAME_FragmentType) && $v1 !== $calc(%HeadData % 128)) {
-        %Error = FRAME_ERROR Recieved Mixed frame data-type fragments
+      ;; Error: Current frame not part of previously received fragment
+      elseif (!%IsControl && $hget($sockname, WSFRAME_FRAGMSG) && %FrameType !== 0) {
+        %Error = FRAME_ERROR Frame-Type specified with subsequent frame fragment
       }
 
-      ;; ERROR - Frame's data length would overflow a 32bit integer
-      ;;   the largest mIRC can safely handle
-      elseif (%FragSize == 127 && $bvar(&_WebSocket_ReadBuffer, 0) >= 6 && $bvar(&_WebSocket_ReadBuffer, 3).nlong !== 0) {
-        %Error = FRAME_ERROR Data size would overflow an int32
+      ;; Error: current frame indicates continuation with no preceeding fragment frame received
+      elseif (!$hget($sockname, WSFRAME_FRAGMSG) && %FrameType == 0) {
+        %Error = FRAME_ERROR Continuation frame received with no preceeding fragmented frame
       }
+
+      ;; Initial checks passed
       else {
 
-        ;; If the 2nd octlet is equal to 126, the fragment size is the following 2 octlets
-        ;;   Make sure the entire frame head has been recieved, and update size variables
-        if (%FragSize == 126) {
+        ;; If payload length is 126; the payload is a 16bit integer.
+        if (%DataSize == 126) {
           if ($bvar(&_WebSocket_ReadBuffer, 0) < 4) {
             break
           }
+          elseif ($bvar(&_WebSocket_ReadBuffer, 3).nword < 126) {
+            %Error = FRAME_ERROR Excessive payload size integer recieved from server
+            break
+          }
+          %DataSize = $v1
           %HeadSize = 4
-          %FragSize = $bvar(&_WebSocket_ReadBuffer, 3, 2).nword
         }
 
-        ;; If the 2nd octlet is equal to 127, the fragment size is the following 8 octlets
-        ;;   Make sure the entire frame head has been recieved, and update size variables
+        ;; If the payload is equal to 127 the payload is a 64bit integer
         elseif (%DataSize == 127) {
           if ($bvar(&_WebSocket_ReadBuffer, 0) < 10) {
             break
           }
+          elseif ($bvar(&bvar_WebSocket_ReadBuffer, 7).nlong < 4294967296) {
+            %Error = FRAME_ERROR Excessive payload size integer recieved from server
+            break
+          }
+          elseif ($bvar(&_WebSocket_ReadBuffer, 3).nlong) {
+            %Error = FRAME_ERROR Frame would exceed a 4gb limit
+            break
+          }
+          %DataSize = $bvar(&_WebSocket_ReadBuffer, 7).nlong
           %HeadSize = 10
-          %FragSize = $bvar(&_WebSocket_ReadBuffer, 7).nlong
         }
 
-        ;; Check to verify the entire frame has been read
-        if ($bvar(&_WebSocket_ReadBuffer, 0) < $calc(%HeadSize + %FragSize)) {
+        ;; Check to make sure the entire frame as been received
+        if ($calc(%HeadSize + %DataSize) < $bvar(&_WebSocket_ReadBuffer, 0)) {
           break
         }
 
-        ;; Retrieve previously stored fragment data, then remove it from the hashtable
-        bunset &_WebSocket_FrameData
-        noop $hget($sockname, WSFRAME_Fragment, &_WebSocket_FrameData)
-        hdel $sockname WSFRAME_Fragment
-        hdel $sockname WSFRAME_FragmentType
 
-        ;; Copy the newly read frame's data to any stored fragments parts, then remove the frame from the received buffer
-        bcopy -c &_WebSocket_FrameData $calc($bvar(&_WebSocket_FrameData, 0) + 1) &_WebSocket_ReadBuffer $calc(%HeadSize + 1) %FragSize
-        if ($calc(%HeadSize + %FragSize) == $bvar(&_WebSocket_ReadBuffer, 0)) {
+        ;; If the frame is a continuation, retrieve previously received
+        ;; fragment.
+        if (%FrameType === 0 && $hget($sockname, WSFRAME_FRAGMSG)) {
+          %FrameType = $hget($sockname, WSFRAME_FRAGMSG_Type)
+          noop $hget($sockname, WSFRAME_FRAGMSG, &_WebSocket_FrameData)
+          hdel $sockname WSFRAME_FRAGMSG_Type
+          hdel $sockname WSFRAME_FRAGMSG_Data
+          hdel $sockname WSFRAME_FRAGMSG
+        }
+
+        ;; Copy the frame's data from the ReadBuffer to the FrameData
+        ;; buffer the remove the data from the ReadBuffer
+        if (%DataSize) {
+          bcopy -c &_WebSocket_FrameData $calc($bvar(&_WebSocket_FrameData,0) + 1) &_WebSocket_ReadBuffer $calc(%HeadSize + 1) %Datasize
+        }
+        if ($calc(%HeadSize + %DataSize) == $bvar(&_WebSocket_ReadBuffer, 0)) {
           bunset &_WebSocket_ReadBuffer
         }
         else {
-          bcopy -c &_WebSocket_ReadBuffer 1 &_WebSocket_ReadBuffer $calc($v1 +1) -1
+          bcopy -c &_WebSocket_ReadBuffer 1 &_WebSocket_ReadBuffer $calc(%HeadSize + %DataSize + 1) -1
         }
 
-        ;; if there's frame data, store it for use with events
-        if ($bvar(&_WebSocket_FrameData, 0)) {
-          hadd -mb $sockname WSFRAME_DATA &_WebSocket_FrameData
+        ;; non-final fragment
+        if (!%IsFinal) {
+          hadd $sockname WSFRAME_FRAGMSG $true
+          hadd $sockname WSFRAME_FRAGMSG_Type %FrameType
+          hadd -b $sockname WSFRAME_FRAGMSG_Data &_WebSocket_FrameData
         }
 
-        ;; otherwise delete the frame data entry
+        ;; full message recieved
         else {
-          hdel $sockname WSFRAME_DATA
-        }
 
-        ;; Store the frame type
-        hadd -m $sockname WSFRAME_TYPE $calc(%HeadData % 128)
-
-        ;; Control-Frame (CLOSE)
-        if (%HeadData == 136) {
-
-          ;; ERROR - if there's data following the close frame, the connection is errorous
-          if ($bvar(&_WebSocket_ReadBuffer, 0)) {
-            %Error = FRAME_ERROR Data recieved after a CLOSE frame has been recieved.
+          ;; store the frame type and data
+          hadd $sockname WSFRAME_TYPE %FrameType
+          if ($bvar(&_WebSocket_FrameData, 0)) {
+            hadd -b $sockname WSFRAME_DATA &_WebSocket_FrameData
           }
-
-          ;; If the client sent a close frame and the server responded:
-          ;;   Otherwise: output debug message, raise event, cleanup after the connection, exit processing
-          elseif ($hget($sockname, CLOSE_PENDING)) {
-            _WebSocket.Debug -i2 %Name $+ >FRAME:CLOSE~Close frame reply received; closing connection.
-            .signal -n WebSocket_CLOSE_ $+ %Name
-            _WebSocket.Cleanup $sockname
-          }
-
-          ;; The close frame is unsoliated:
-          ;;   Output debug message, raise closing event, update sock state, and queue close frame
           else {
-            _WebSocket.Debug -i %Name $+ >FRAME:CLOSE~Close frame received.
-            .signal -n WebSocket_CLOSING_ $+ %Name %Name
+            hdel $sockname WSFRAME_DATA
+          }
+
+          ;; TEXT or BINARY frame
+          ;;   Output debug message and raise data event
+          if (%FrameType isnum 1-2) {
+            _WebSocket.Debug -i %Name $+ >FRAME~ $+ $iif(%FrameType == 1, TEXT, BINARY) frame recieved
+            .signal -n WebSocket_DATA_ $+ %Name
+          }
+
+          ;; PING frame
+          ;;   Output debug message, response with pong, raise data event
+          elseif (%FrameType == 9) {
+            _WebSocket.Debug -i %Name $+ >FRAME~PING frame recieved
+            WebSockWrite -P %Name &_WebSocket_FrameData
+            .signal -n WebSocket_DATA_ $+ %Name
+          }
+
+          ;; PONG frame
+          ;;   Output debug message and raise data event
+          elseif (%FrameType == 10) {
+            _WebSocket.Debug -i %Name $+ >FRAME~PONG frame recieved
+            .signal -n WebSocket_DATA_ $+ %Name
+          }
+
+          ;; CLOSE Frame - Data after frame
+          elseif ($bvar(&_WebSocket_ReadBuffer, 0)) {
+            %Error = FRAME_ERROR Data recieved after a CLOSE frame has been recieved.
+            break
+          }
+
+          ;; CLOSE frame - Server Requested
+          elseif (!$hget($sockname, CLOSE_PENDING)) {
+            _WebSocket.Debug -i %Name $+ >FRAME~CLOSE frame received.
             hadd $sockname SOCK_STATE 5
+            .signal -n WebSocket_CLOSING_ $+ %Name %Name
             WebSockClose %Name
           }
-          break
+
+          ;; CLOSE Frame - Client requested & server responded
+          else {
+            _WebSocket.Debug -i2 %Name $+ >FRAME:CLOSE~CLOSE frame reply received; closing connection.
+            .signal -n WebSocket_CLOSE_ $+ %Name
+            _WebSocket.Cleanup $sockname
+            return
+          }
         }
-
-        ;; Control-Frame (PING)
-        ;;   Output debug message, raise PING event, queue outgoing PONG frame
-        elseif (%HeadData == 137) {
-          _WebSocket.Debug -i %Name $+ >FRAME:PING~Ping frame received.
-          .signal -n WebSocket_PING_ $+ %Name
-          WebSockWrite -P %Name &_WebSocket_FrameData
-        }
-
-        ;; Control-Frame (PONG)
-        ;;  Output debug message and raise PONG event
-        elseif (%HeadData == 138) {
-          _WebSocket.Debug -i %Name $+ >FRAME:PING~Pong frame received.
-          .signal -n WebSocket_PONG_ $+ %Name
-        }
-
-        ;; if the frame is not a final-fragment, store the data for the next frame read
-        else if (!$isbit(%HeadData, 8)) {
-          hadd -b $sockname WSFRAME_Fragment &_WebSocket_FrameData
-          hadd $sockname  WSFRAME_FragmentType $calc(%HeadData % 128)
-        }
-
-        ;; Data-Frame: TEXT(129) or BINARY(130)
-        elseif (%HeadData == 129 || %HeadData == 130) {
-          _WebSocket.Debug -i %Name $+ >FRAME:Data~ $+ $iif(%HeadData == 129, Text, Binary) frame recieved
-          .signal -n WebSocket_DATA_ $+ %Name
-        }
-      }
-
-      ;; cleanup
-      hdel $sockname WSFRAME_DATA
-      hdel $sockname WSFRAME_TYPE
-
-      ;; if an error occured, exit looping
-      if (%Error) {
-        break
       }
     }
 
