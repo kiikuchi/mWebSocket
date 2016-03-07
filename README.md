@@ -1,6 +1,10 @@
 # mWebSocket
 mWebSocket aims to implement the client portion of the [WebSocket Standard](https://tools.ietf.org/html/rfc6455) in mSL for mIRC and AdiIRC. It is not, however, a fully featured HTTP client and as such will not follow HTTP redirects or process non-websocket related responses.  
 &nbsp;  
+
+Due to this script being in early developement expect a flux of changes along with the documentation not being 100% up to date.
+
+&nbsp;  
 If you appreciate the work done, consider donating via paypal: froggiedafrog@aim.com  
 
 &nbsp;  
@@ -186,32 +190,32 @@ Identifiers
 
 #### `$WebSockType`  
 > Returns the frame-type recieved  
-> Only applicable from within the `CLOSING`(8), `PING`(9), `PONG`(10), AND `DATA`(1 for text or 2 for binary) events  
+> Only applicable from within the `CLOSING` and `DATA` events  
 
 &nbsp;  
 &nbsp;  
 
 
 #### `$WebSockTypeText`  
-> Returns the frame-type recieved as text: `CLOSE`, `PING`, `PONG`, `TEXT`, `BINARY`  
-> Only applicable from within the `CLOSING`, `PING`, `PONG`, AND `DATA` events  
+> Returns the frame-type recieved as text (`CLOSE`, `PING`, `TEXT`, etc)
+> Only applicable from within the `CLOSING` and `DATA` events  
 
 &nbsp;  
 &nbsp;  
 
 #### `$WebSockText`  
 > Returns the data recieved as text.  
-> Only applicable from within the `CLOSING`, `PING`, `PONG`, AND `DATA` events  
+> Only applicable from within the `CLOSING` and `DATA` events  
 
 &nbsp;  
 &nbsp;  
 
 #### `$WebSockData(&bvar)`  
 > Fills the specified binary variable with the received data  
-> Only applicable from within the `CLOSING`, `PING`, `PONG`, AND `DATA` events  
+> Only applicable from within the `CLOSING` and `DATA` events  
 
 **Parameters**  
-> `&bvar` - Required
+> `&bvar` - Required  
 > An empty bvar to be filled with the read data  
 
 &nbsp;  
@@ -225,8 +229,8 @@ Identifiers
 &nbsp;  
 
 #### `$WebSockErrMsg`
-Returns the WebSocket error message  
-Only applicatable from within the `ERROR` event
+> Returns the WebSocket error message  
+> Only applicatable from within the `ERROR` event
 
 &nbsp;  
 &nbsp;  
@@ -273,31 +277,15 @@ Events
 &nbsp; 
 
 #### Event: `DATA`
-> Raised when a DATA frame has been recieved
+> Raised when a DATA, PING or PONG frame has been recieved.
 >
 > `$WebSock` can be used to retrieve the WebSock name  
-> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
-
-&nbsp;  
-&nbsp; 
-
-#### Event: `PING`
-> Raised when a PING frame has been recieved
+> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the received data  
 >
-> `$WebSock` can be used to retrieve the WebSock name  
-> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
+> The script will automatically respond to WebSocket PING frames
 
 &nbsp;  
-&nbsp; 
-
-#### Event: `PONG`
-> Raised when a PONG frame has been recieved
->
-> `$WebSock` can be used to retrieve the WebSock name  
-> `$WebSockType`, `$WebSockTypeText`, `$WebSockText` and `$WebSockData` can be used to reference the recieved data  
-
-&nbsp;  
-&nbsp; 
+&nbsp;
 
 #### Event: `CLOSING`
 > Raised when a CLOSE frame has been recieved
@@ -318,7 +306,7 @@ Events
 &nbsp; 
 
 #### Event: `ERROR`
-> Raised when an error occured durring socket communications.
+> Raised when an error occured durring socket communications.  
 > The websocket will be destroyed after this event.
 >
 > `$WebSockErr` and `$WebSockErrMsg` can be used to access information about the error
