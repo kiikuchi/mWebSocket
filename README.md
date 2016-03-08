@@ -10,9 +10,18 @@ If you appreciate the work done, consider donating via paypal: froggiedafrog@aim
 &nbsp;  
 &nbsp;  
 
+Rights and Distributing
+-----------------------
+> You may do with the code as you wish so long as you do not redistrubute any files contained with in this repository, in part or whole, without direct permission from me. You may directly link to any asset within this repository so long as you also include a link to the top level of the repository.  
+>
+> SReject © 2016; All rights reserved.
+
+&nbsp;  
+&nbsp;  
+
 Requirements
 ------------
-mIRC v7.4x or AdiIRC v2.2  
+> mIRC v7.4x or AdiIRC v2.2  
 
 &nbsp;  
 &nbsp;  
