@@ -139,7 +139,7 @@ alias WebSockWrite {
     return
   }
 
-  var %FrameSwitch, %DataSwitch, %Name, %Sock, %Error, %Control = $false, %Code = 1, %TypeText = TEXT, %BVar = &_WebSocket_FrameData, %BVarUnset = $true, %Index, %Size, %MaskByte1, %MaskByte2, %MaskByte3, %MaskByte4
+  var %FrameSwitch, %DataSwitch, %Name, %Sock, %Error, %CompFrame = &_WebSocket_CompiledFrame, %Type, %Data, %BUnset, %Size, %Index = 1, %Mask1, %Mask2, %Mask3, %Mask4, %QuadMask
 
   ;; parse switches
   if ($left($1, 1) isin +-) {
@@ -153,7 +153,7 @@ alias WebSockWrite {
   %Name = $1
   %Sock = _WebSocket_ $+ $1
 
-  ;; validate switches
+  ;; validate switches and parameters
   if ($regex(%FrameSwitch, ([^cpPbt]))) {
     %Error = Unknown switch specified: $regml(1)
   }
@@ -166,126 +166,153 @@ alias WebSockWrite {
   elseif ($regex(%DataSwitch, ([^t]))) {
     %Error = Invalid Data-force switch + $+ $regml(1)
   }
-
-  ;; validate name parameter
   elseif (!$regex($1, ^(?!\d+$)[^?*]+$) || !$sock(%Sock)) {
     %Error = WebSocket does not exist
   }
 
-  ;; validate socket state
+  ;; Validate socket state
   elseif (!$hget(%Sock) || !$len($hget(%Sock, SOCK_STATE))) {
     hadd -m %Sock ERROR INTERNAL_ERROR State lost
     _WebSocket.Debug -e %Name $+ >STATE~State lost for %Name
     _WebSocket.RaiseError %Name INTERNAL_ERROR sock state lost
   }
-  elseif ($hget(%Sock, SOCK_STATE) == 0 || $v1 == 5) {
+  elseif ($hget(%Sock, CLOSE_PENDING)) {
+    %Error = Close frame already queued; Cannot queue more
+  }
+  elseif ($hget(%Sock, SOCK_STATE) isin 0 5) {
     %Error = Connection in closing
   }
-  elseif ($v1 !== 4) {
+  elseif ($hget(%Sock, SOCK_STATE) !== 4) {
     %Error = WebSocket connection not established
-  }
-  elseif ($hget(%Sock, CLOSE_PENDING)) {
-    %Error = Close frame sent; cannot add more frames
   }
 
   ;; Validate data
-  elseif (%FrameSwitch isincs bt && $0 == 1) {
-    %Error = No data to send
-  }
-  elseif (%DataSwitch !== t && &?* iswm $2 && $0 == 2 && $bvar($2, 0) > 4294967295) {
+  elseif (t !isincs %DataSwitch && $0 == 2 && &?* iswm $2 && $bvar($2, 0) > 4294967295) {
     %Error = Specified bvar exceeds 4gb
   }
+
+  ;; Validation done; start compiling the frame
   else {
 
-    ;; Frame-Type delegation
-    if (c isincs %FrameSwitch) {
-      %Control = $true
-      %Code = 8
-      %TypeText = CLOSE
+    ;; Cleanup just to be safe
+    bunset &_WebSocket_SendBuffer &_WebSocket_FrameData %CompFrame
+
+    ;; Frame type deduction in the order of:
+    ;;   PONG, PING, CLOSE, BINARY, TEXT
+    if (P isincs %FrameSwitch) {
+      bset %CompFrame 1 138
+      %Type = PONG
     }
     elseif (p isincs %FrameSwitch) {
-      %Control = $true
-      %Code = 9
-      %TypeText = PING
+      bset %CompFrame 1 137
+      %Type = PING
     }
-    elseif (P isincs %FrameSwitch) {
-      %Control = $true
-      %Code = 10
-      %TypeText = PONG
+    elseif (c isincs %FrameSwitch) {
+      bset %CompFrame 1 136
+      %Type = CLOSE
     }
     elseif (b isincs %FrameSwitch) {
-      %Code = 2
-      %TypeText = BINARY
-    }
-
-    ;; Store data in bvar if need be
-    bunset &_WebSocket_CompiledFrame &_WebSocket_FrameData &_WebSocket_SendBuffer
-
-    if (t !isin %DataSwitch && &?* iswm $2 && $0 == 2) {
-      %BVar = $2
-      %BVarUnset = $false
-    }
-    elseif ($0 >= 2) {
-      bset -t %BVar 1 $2-
-    }
-
-    ;; store code: 1000 xxxx
-    bset &_WebSocket_CompiledFrame 1 $calc(128 + %Code)
-
-    ;; If there is data to accompany the frame
-    if ($Bvar(%BVar, 0)) {
-      %Size = $v1
-      %Index = 1
-
-      ;; build payload-size field
-      if (%Size < 126) {
-        bset &_WebSocket_CompiledFrame 2 $calc(128 + $v1)
-      }
-      elseif ($v1 isnum 126-65535) {
-        bset &_WebSocket_CompiledFrame 2 254 $regsubex($base($v1, 10, 2, 16), /^(\d{8})/,$base(\t, 2, 10) $+ $chr(32))
-      }
-      else {
-        bset &_WebSocket_CompiledFrame 2 255 $regsubex($base($v1, 10, 2, 64), /^(\d{8})/,$base(\t, 2, 10) $+ $chr(32))
-      }
-
-      ;; create masking bytes at random and append them to the frame
-      %MaskByte1 = $r(0, 255)
-      %MaskByte2 = $r(0, 255)
-      %MaskByte3 = $r(0, 255)
-      %MaskByte4 = $r(0, 255)
-      bset &_WebSocket_CompiledFrame $calc($bvar(&_WebSocket_CompiledFrame, 0) + 1) %MaskByte1 %MaskByte2 %MaskByte3 %MaskByte4
-
-      ;; loop over each byte of the frame's assocated data
-      while (%Index <= %Size) {
-
-        ;; mask the byte and append it to the frame
-        bset &_WebSocket_CompiledFrame $calc($bvar(&_WebSocket_CompiledFrame, 0) + 1) $xor($bvar(%BVar, %Index), $($+(%, MaskByte, $calc((%Index - 1) % 4 + 1)), 2))
-        inc %Index
-      }
-      if (%BVarUnset) {
-        bunset %BVar
-      }
+      bset %CompFrame 1 130
+      %Type = BINARY
     }
     else {
-      bset &_WebSocket_CompiledFrame 2 0
+      bset %CompFrame 1 129
+      %Type = TEXT
+    }
+
+    ;; If the data parameter is a bvar use it, otherwise use an internal
+    ;; bvar and, if there is data, store that data in the bvar
+    if (t !isincs %DataSwitch && &?* iswm $2 && $0 == 2) {
+      %Data = $2
+    }
+    else {
+      %Data = &_WebSocket_FrameData
+      if ($0 > 1) {
+        bset -tc %Data 1 $2-
+      }
+    }
+
+    ;; if there's data to accompany the frame
+    if ($bvar(%Data, 0)) {
+      %Size  = $v1
+
+      ;; if a control frame is being sent and its data is larger than 125
+      ;; bytes
+      if (%Type !isincs TEXT BINARY && %Size > 125) {
+        %Error = Control frame data cannot be larger than 125 bytes
+        goto error
+      }
+
+      ;; payload is larger than what mIRC can safely handle
+      elseif (%Size > 4294967295) {
+        %Error = Frame data exceeds 4gb limit
+        goto error
+      }
+
+      ;; Payload size requires a 64bit integer
+      elseif (%Size > 65535) {
+        bset %CompFrame 2 255 0 0 0 0 $replace($longip(%Size), ., $chr(32))
+      }
+
+      ;; Payload size requires a 16bit integer
+      elseif (%Size > 125) {
+        bset %CompFrame 2 254 $replace($gettok($longip(%Size), 3-, 46), ., $chr(32))
+      }
+
+      ;; Payload size can fit within a 7bit integer
+      else {
+        bset %CompFrame 2 $calc(128 + %Size)
+      }
+
+      ;; Create masking octlets at random and append them to the frame
+      %Mask1 = $r(0, 255)
+      %Mask2 = $r(0, 255)
+      %Mask3 = $r(0, 255)
+      %Mask4 = $r(0, 255)
+      bset %CompFrame $calc($bvar(%CompFrame, 0) + 1) %Mask1 %Mask2 %Mask3 %Mask4
+
+      ;; Mask 4 octlets at a time so long as there is atleast 4 octlets to mask
+      %QuadMask = $calc(%Size - (%Size % 4))
+      while (%Index < %QuadMask) {
+        bset %CompFrame $calc($bvar(%CompFrame,0) +1) $xor($bvar(%Data,%Index),%Mask1) $xor($bvar(%Data,$calc(1+ %Index)),%Mask2) $xor($bvar(%Data,$calc(2+ %Index)),%Mask3) $xor($bvar(%Data,$calc(3+ %Index)),%Mask4)
+        inc %Index 4
+      }
+
+      ;; Mask any remaining octlets
+      if (%Index <= %Size) {
+        bset %CompFrame $calc($bvar(%CompFrame,0) +1) $xor($bvar(%Data,%Index),%Mask1)
+        inc %index
+        if (%Index <= %Size) {
+          bset %CompFrame $calc($bvar(%CompFrame,0) +1) $xor($bvar(%Data,%Index),%Mask2)
+          inc %index
+          if (%Index <= %Size) {
+            bset %CompFrame $calc($bvar(%CompFrame,0) +1) $xor($bvar(%Data,%Index),%Mask3)
+          }
+        }
+      }
+    }
+
+    ;; if no data to accompany the frame set the PayLoad-Length byte to 0
+    else {
+      bset %CompFrame 2 0
     }
 
     ;; Add the frame to the send buffer, update state, and begin sending
     if ($hget(%Sock, WSFRAME_Buffer, &_WebSocket_SendBuffer)) {
-      bcopy -c &_WebSocket_SendBuffer $calc($bvar(&_WebSocket_SendBuffer, 0) + 1) &_WebSocket_CompiledFrame 1 -1
-      hadd -mb %Sock WSFRAME_Buffer &_WebSocket_SendBuffer
-      bunset &_WebSocket_SendBuffer
+      bcopy -c &_WebSocket_SendBuffer $calc($bvar(&_WebSocket_SendBuffer, 0) + 1) %CompFrame 1 -1
+      hadd -b %Sock WSFRAME_Buffer &_WebSocket_SendBuffer
     }
     else {
-      hadd -mb %Sock WSFRAME_Buffer &_WebSocket_CompiledFrame
+      hadd -b %Sock WSFRAME_Buffer %CompFrame
     }
-    bunset &_WebSocket_CompileFrame
 
-    ;; Output debug message, update state if a CLOSE frame is being sent, and process the send queue
-    _WebSocket.Debug -i %Name $+ >FRAME_SEND~ $+ %TypeText frame queued.
-    if (%Code === 8) {
-      hadd -m %Sock CLOSE_PENDING $true
+    ;; Update state if a CLOSE frame is being sent, output debug message,
+    ;; cleanup, and process the send queue
+    if (%Type == CLOSE) {
+      hadd %Sock CLOSE_PENDING $true
     }
+    _WebSocket.Debug -i %Name $+ >FRAME_SEND~ $+ %Type frame queued. Size: $bvar(%CompFrame, 0) -- Head: $bvar(%CompFrame, 1, 2) -- Payload-Len: $calc($bvar(%CompFrame, 2) % 128)
+    bunset &_WebSocket_SendBuffer %CompFrame &_WebSocket_FrameData
     _WebSocket.Send %Sock
   }
 
@@ -324,7 +351,7 @@ alias WebSockClose {
   elseif (e isincs %Switches && !$regex(errorcode, %Switches, /e(\d{4})/)) {
     %Error = Invalid error code
   }
-  
+
   ;; Validate parameters
   elseif ($0 < 1) {
     %Error = Missing parameters
@@ -332,20 +359,16 @@ alias WebSockClose {
   elseif (!$regex(%Name, /^(?!\d+$)[^?*-][^?*]*$/)) {
     %Error = Invalid websocket name
   }
-  
+
   ;; Validate state
   elseif (!$sock(%Sock)) {
     ._WebSocket.Cleanup %Sock
     %Error = WebSocket does not exist
   }
 
-  ;; if its a force close by cleaning up the sock
-  elseif (f isincs %Switches) {
-    ._WebSocket.Cleanup %Sock
-  }
-
-  ;; if the handshake is incomplete, cleanup the sock
-  elseif ($hget(%Sock, SOCK_STATE) isnum 1-3) {
+  ;; if its a force close or the HTTP handshake is incomplete cleanup the
+  ;; connection
+  elseif (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
     _WebSocket.Cleanup %Sock
   }
 
@@ -359,7 +382,7 @@ alias WebSockClose {
 
   ;; send close-frame
   else {
-    
+
     if ($0 == 1) {
       WebSockWrite -c %Name
     }
@@ -369,17 +392,17 @@ alias WebSockClose {
         %StatusCode = $base($v1, 10, 2, 16)
         bset -c &_WebSocket_CloseStatusCode 1 $base($left(%StatusCode, 8), 2, 10) $base($mid(%StatusCode, 9), 2, 10)
       }
-      
+
       ;; No status code, use 1000
       else {
         bset -c &_WebSocket_CloseStatusCode 1 3 232
       }
-      
+
       ;; If a message is to accompany the status code, append it
       if ($0 > 1) {
         bset -t &_WebSocket_CloseStatusCode 2 $2-
       }
-      
+
       ;; call the WebSockWrite command then cleanup
       WebSockWrite -c %Name &_WebSocket_CloseStatusCode
       bunset &_WebSOcket_CloseStatusCode

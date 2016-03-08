@@ -8,7 +8,7 @@ on $*:SOCKWRITE:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   elseif (!$hget($sockname) || !$len(%State)) {
     %Error = INTERNAL_ERROR State lost
   }
-  elseif (%State !== 2 && %State !== 4 && %State !== 5) {
+  elseif (%State !isnum 2-5 && %State !== 3) {
     %Error = INTERNAL_ERROR State doesn't corrospond with data-send attempt: %State
   }
 

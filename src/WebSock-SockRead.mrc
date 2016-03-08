@@ -1,5 +1,8 @@
 on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %Header, %IsFinal, %RSVBits, %IsControl, %FrameType, %DataSize
+  
+  ;; Output debug message indicating a sockread event occured
+  _WebSocket.debug -i2 %Name $+ >SOCKREAD~Sockname: $Sockname -- SockErr: $sockerr -- RecvQueue: $sock($sockname).rq  -- State: $hget($sockname, SOCK_STATE) -- Closing: $hget($sockname, CLOSE_PENDING)
 
   ;; Basic Error checks
   if ($sockerr) {
@@ -12,10 +15,10 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
     %Error = FRAME_ERROR Frame recieved after a CLOSE frame has been recieved.
   }
 
-  ;;----------------------------;;
-  ;;    Handshake Processing    ;;
-  ;;----------------------------;;
-  elseif ($v1 == 3) {
+  ;;---------------------------------;;
+  ;;    HTTP Handshake Processing    ;;
+  ;;---------------------------------;;
+  elseif ($hget($sockname, SOCK_STATE) == 3) {
 
     ;; make sure the key sent to the server with the request is still accessible
     if (!$hget($sockname, HTTPREQ_SecWebSocketKey)) {
@@ -123,9 +126,9 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
     }
   }
 
-  ;;------------------------;;
-  ;;    Frame processing    ;;
-  ;;------------------------;;
+  ;;----------------------------------;;
+  ;;    WebSocket Frame processing    ;;
+  ;;----------------------------------;;
   elseif ($hget($sockname, SOCK_STATE) == 4) {
 
     ;; cleanup before further processing
@@ -282,14 +285,14 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
           ;; TEXT or BINARY frame
           ;;   Output debug message and raise data event
           if (%FrameType isnum 1-2) {
-            _WebSocket.Debug -i %Name $+ >FRAME~ $+ $iif(%FrameType == 1, TEXT, BINARY) frame recieved
+            _WebSocket.Debug -i %Name $+ >FRAME_RECV~ $+ $iif(%FrameType == 1, TEXT, BINARY) frame recieved
             .signal -n WebSocket_DATA_ $+ %Name
           }
 
           ;; PING frame
           ;;   Output debug message, response with pong, raise data event
           elseif (%FrameType == 9) {
-            _WebSocket.Debug -i %Name $+ >FRAME~PING frame recieved
+            _WebSocket.Debug -i %Name $+ >FRAME_RECV~PING frame recieved
             WebSockWrite -P %Name &_WebSocket_FrameData
             .signal -n WebSocket_DATA_ $+ %Name
           }
@@ -297,7 +300,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
           ;; PONG frame
           ;;   Output debug message and raise data event
           elseif (%FrameType == 10) {
-            _WebSocket.Debug -i %Name $+ >FRAME~PONG frame recieved
+            _WebSocket.Debug -i %Name $+ >FRAME_RECV~PONG frame recieved
             .signal -n WebSocket_DATA_ $+ %Name
           }
 
@@ -309,7 +312,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
 
           ;; CLOSE frame - Server Requested
           elseif (!$hget($sockname, CLOSE_PENDING)) {
-            _WebSocket.Debug -i %Name $+ >FRAME~CLOSE frame received.
+            _WebSocket.Debug -i %Name $+ >FRAME_RECV~CLOSE frame received.
             hadd $sockname SOCK_STATE 5
             .signal -n WebSocket_CLOSING_ $+ %Name %Name
             WebSockClose %Name
@@ -317,7 +320,7 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
 
           ;; CLOSE Frame - Client requested & server responded
           else {
-            _WebSocket.Debug -i2 %Name $+ >FRAME:CLOSE~CLOSE frame reply received; closing connection.
+            _WebSocket.Debug -i2 %Name $+ >FRAME_RECV~CLOSE frame reply received; closing connection.
             .signal -n WebSocket_CLOSE_ $+ %Name
             _WebSocket.Cleanup $sockname
             return

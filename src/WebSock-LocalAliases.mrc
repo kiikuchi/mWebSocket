@@ -33,7 +33,7 @@ alias -l _WebSocket.Send {
   ;; HTTP Request send handling
   elseif ($v1 === 2) {
 
-    ;; if the buffer and send queue is empty, the request has finished being set
+    ;; if the buffer and send queue is empty, the request has finished being sent
     ;; output debug message, update state, and raise REQSENT event
     if (!$hget($1, HTTPREQ_HEAD, &_WebSocket_SendBuffer) && !$sock($1).sq) {
       _WebSocket.Debug -i2 %Name $+ >Head_Sent Finished sending request.
@@ -72,16 +72,17 @@ alias -l _WebSocket.Send {
   elseif ($hget($1, WSFRAME_Buffer, &_WebSocket_SendBuffer) && $sock($1).sq < 16384) {
     %Space = $calc($v2 - $v1)
     %Size = $bvar(&_WebSocket_SendBuffer, 0)
-    if (%Size <= %Space) {
+    if (%Size > %Space) {
+      sockwrite -b $1 %Space &_WebSocket_SendBuffer
+      bcopy -c &_WebSocket_SendBuffer 1 &_WebSocket_SendBuffer $calc(%Space +1) -1
+      hadd -b $1 WSFRAME_Buffer &_WebSocket_SendBuffer
+      _WebSocket.Debug -i %Name $+ >FRAME_SEND~Added %Space bytes of frame data to send buffer
+    }
+    
+    else {
       sockwrite $1 &_WebSocket_SendBuffer
       hdel $1 WSFRAME_Buffer
       _WebSocket.Debug -i %Name $+ >FRAME_SEND~All pending frame data now in send buffer
-    }
-    else {
-      sockwrite -b $1 %Space &_WebSocket_SendBuffer
-      bcopy -c &_WebSocket_SendBuffer 1 &_WebSocket_SendBuffer $calc(%Space +1) -1
-      hadd -mb $1 WSFRAME_Buffer &_WebSocket_SendBuffer
-      _WebSocket.Debug -i %Name $+ >FRAME_SEND~Added %Space bytes of frame data to send buffer
     }
   }
 

@@ -8,8 +8,6 @@ alias wstest {
   WebSockOpen wstest ws://echo.websocket.org/
 }
 
-
-
 ;; INIT event raised when the socket(not to be confused with websocket)
 ;; connection has been established. You do not need to specify this event
 ;; unless you intend/need to set request headers.
@@ -32,10 +30,9 @@ on *:SIGNAL:WebSocket_INIT_wstest:{
   echo -s -
 }
 
-
+;; REQSENT event raised when the HTTP request has been sent and the script
+;; is waiting for a response from the server
 on *:SIGNAL:WebSocket_REQSENT_wstest:{
-
-  ;; Output state-change message
   echo 10 -s [wstest>REQSENT] Request sent
 }
 
@@ -47,6 +44,7 @@ on *:SIGNAL:WebSocket_READY_wstest:{
 
   ;; Output state-change message
   echo 12 -s [wstest>READY] Handshake Complete
+  echo -s -
 
   ;; Output information about the websock
   echo 03 -s [wstest>READY] HTTP Version: $WebSock(wstest).HttpVersion
@@ -65,23 +63,40 @@ on *:SIGNAL:WebSocket_READY_wstest:{
   }
   echo -s -
 
-  ;; Since the handshake is complete, /WebSockWrite can be used to send
-  ;; data to the server
+  ;; Since the handshake is complete, attempt to send some data to through
+  ;; the websock using /WebSockWrite
   WebSockWrite +t $WebSock abc
 }
 
+;; DATA event raised when the server has sent data to the client. To
+;; handle the data, you can use the $WebSockFrame identifer to
+;; retrieve information about the frame such as type, or its data as
+;; either text or binary
 on *:SIGNAL:WebSocket_DATA_wstest:{
-  echo 10 -s [wstest>DATA] $WebSockTypeText $+ ( $+ $WebSockType $+ ) frame recieved $+ $iif($WebSockText, : $v1, .)
+  echo 10 -s [wstest>DATA] $WebSockFrame(TypeText) $+ ( $+ $WebSockFrame(Type) $+ ) frame recieved $+ $iif($WebSockFrame, : $v1, .)
 }
-on *:SIGNAL:WebSocket_ERROR_wstest:{
-  echo 04 -s [wstest>ERROR] Error: $WebSockErr > $WebSockErrMsg
+
+;; CLOSING event raised when the server sends a close frame. As with the
+;; data frame, $WebSockFrame can be used to retrieve information about
+;; the frame
+on *:SIGNAL:WebSocket_CLOSING_wstest:{
+  echo 10 -s [wstest>DATA] $WebSockFrame(TypeText) $+ ( $+ $WebSockFrame(Type) $+ ) frame recieved $+ $iif($WebSockFrame, : $v1, .)
 }
-on *:SIGNAL:WebSOcket_CLOSING_wstest:{
-  echo 07 -s [wstest>CLOSING] $WebSockTypeText $+ ( $+ $WebSockType $+ ) frame recieved $+ $iif($WebSockText, : $v1, .)
-}
+
+;; CLOSED event raised when the connection has successfully been closed by
+;; the server
 on *:SIGNAL:WebSocket_CLOSE_wstest:{
   echo 07 -s [wstest>CLOSE] Connection closed.
 }
+
+;; ERROR event raised when the connection suffers from an error.
+;; $WebSockErr and $WebSockErrMsg can be used to identify the issue
+on *:SIGNAL:WebSocket_ERROR_wstest:{
+  echo 04 -s [wstest>ERROR] Error: $WebSockErr > $WebSockErrMsg
+}
+
+;; FINISHED event raised when the connection has been completely closed
+;; and all resources related to the event have been freed
 on *:SIGNAL:WebSocket_FINISHED_wstest:{
   echo 12 -s [wstest>FINISHED] All resources freed
 }

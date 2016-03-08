@@ -326,6 +326,10 @@ Events
 
 Special Thanks
 --------------
-> ACPixel: Giving me the idea  
-> Membear: Giving me extensive examples to help me understand the protocol  
-> Ouims:   Various general help  
+
+| User    | Reason                                                         |
+|---------|----------------------------------------------------------------|
+| ACPixel | Giving me the idea                                             |
+| Membear | Providing help with the protocol                               |
+| Ouims   | Various code improvement suggestions                           |
+| Saturn  | Suggesting the use of `$longip()` to convert to 16/32bit uints |
