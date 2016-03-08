@@ -188,35 +188,26 @@ Identifiers
 &nbsp;  
 &nbsp;  
 
-#### `$WebSockType`  
-> Returns the frame-type recieved  
+#### `$WebSockFrame`  
+> Returns the received frames data as utf8 text 
 > Only applicable from within the `CLOSING` and `DATA` events  
 
 &nbsp;  
 &nbsp;  
 
 
-#### `$WebSockTypeText`  
-> Returns the frame-type recieved as text (`CLOSE`, `PING`, `TEXT`, etc)  
-> Only applicable from within the `CLOSING` and `DATA` events  
-
-&nbsp;  
-&nbsp;  
-
-#### `$WebSockText`  
-> Returns the data recieved as text.  
-> Only applicable from within the `CLOSING` and `DATA` events  
-
-&nbsp;  
-&nbsp;  
-
-#### `$WebSockData(&bvar)`  
-> Fills the specified binary variable with the received data  
-> Only applicable from within the `CLOSING` and `DATA` events  
+#### `$WebSockFrame(Type|TypeText|&bvar)`  
+> Returns various information about the recieved frame  
 
 **Parameters**  
-> `&bvar` - Required  
-> An empty bvar to be filled with the read data  
+> `Type` - literal  
+> if the literal text `Type` is specified, the frame type numerical value is returned  
+>  
+> `TypeText` - literal  
+> If the literal text `TypeText` is specified, the frame's type text representation is returned  
+>
+> `&bvar`  
+> if a valid bvar is specified, the frame data will be copied into the specified bvar overwriting any data it previously contained  
 
 &nbsp;  
 &nbsp;  
