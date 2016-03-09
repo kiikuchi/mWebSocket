@@ -124,6 +124,12 @@ Commands
 > The WebSocket to close  
 
 &nbsp;  
+&nbsp;
+
+#### `/WebSockList`
+> Lists all open WebSockets  
+
+&nbsp;  
 &nbsp;  
 
 Identifiers

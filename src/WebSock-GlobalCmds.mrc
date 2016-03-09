@@ -418,7 +418,6 @@ alias WebSockClose {
   }
 }
 
-
 ;; /WebSockDebug [on|off]
 ;;   Toggles the WebSock debugger
 ;;
@@ -449,5 +448,23 @@ alias WebSockDebug {
   ;; create debug window if required
   if ($group(#_WebSocket_Debug) == on && !$window(@WebSocketDebug)) {
     window -nzk0 @WebSocketDebug
+  }
+}
+
+;; /WebSockList
+;;   Lists all open websocket handlers by name
+alias WebSockList {
+  var %Index = 1, %Count = $sock(_WebSocket_?*, 0)
+  if (!%Count) {
+    echo $color(info).dd -age * No open WebSockets
+  }
+  else {
+    echo $color(info).dd -ag -
+    echo $color(info).dd -ag * Open WebSockets:
+    while (%Index <= %Count) {
+      echo -ag * $gettok($sock(_WebSocket_?*, %Index), 2-, 95)
+      inc %Index
+    }
+    echo $color(info).dd -ag -
   }
 }
