@@ -1,6 +1,6 @@
 on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
   var %Error, %Name = $gettok($sockname, 2-, 95), %HeadData, %Index, %SecAccept, %HeadSize, %Header, %IsFinal, %RSVBits, %IsControl, %FrameType, %DataSize
-  
+
   ;; Output debug message indicating a sockread event occured
   _WebSocket.debug -i2 %Name $+ >SOCKREAD~Sockname: $Sockname -- SockErr: $sockerr -- RecvQueue: $sock($sockname).rq  -- State: $hget($sockname, SOCK_STATE) -- Closing: $hget($sockname, CLOSE_PENDING)
 
@@ -236,10 +236,9 @@ on $*:SOCKREAD:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
         }
 
         ;; Check to make sure the entire frame as been received
-        if ($calc(%HeadSize + %DataSize) < $bvar(&_WebSocket_ReadBuffer, 0)) {
+        if ($calc(%HeadSize + %DataSize) > $bvar(&_WebSocket_ReadBuffer, 0)) {
           break
         }
-
 
         ;; If the frame is a continuation, retrieve previously received
         ;; fragment.
