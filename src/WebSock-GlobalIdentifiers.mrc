@@ -6,15 +6,35 @@ alias WebSock {
 
   var %Name, %Sock, %State, %Find, %Index, %Header
 
-  ;; Deduce the websock and socket name
+  ;; Deduce the websock and socket name from event
   if (!$0) {
     if ($event !== signal || !$regex(NameFromSignal, $signal, /^WebSocket_[a-zA-z]+_(?!\d+$)([^?*-][^?*]*)$/i)) {
       return
     }
     %Name = $regml(NameFromSignal, 1)
   }
+  
+  ;; $websock(0)
+  elseif ($1 == 0) {
+    return $iif(!$len($prop), $sock(_WebSocket_?*, 0))
+  }
+  
+  ;; $websock(name)
   elseif ($regex(Name, $1, /^(?!\d+$)([^?*-][^?*]*)$/)) {
     %Name = $regml(Name, 1)
+  }
+  
+  ;; $websock(wildcard, n)
+  elseif ($0 == 2 && $2 isnum 0- && . !isin $2 && (? isin $1 || * isin $1)) {
+    if ($2 == 0) {
+      return $sock(_WebSocket_ $+ $1, 0)
+    }
+    elseif ($sock(_WebSocket_ $+ $1, $2)) {
+      %Name = $gettok($v1, 2-, 95)
+    }
+    else {
+      return
+    }
   }
   else {
     return
