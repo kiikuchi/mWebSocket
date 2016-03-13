@@ -133,7 +133,7 @@ alias WebSockHeader {
   }
 }
 
-;; /WebSockWrite -[c|p|P|b|t]+t name [data]
+;; /WebSockWrite -[c|p|P|b|t]+wt name [data]
 alias WebSockWrite {
   if ($isid) {
     return
@@ -163,36 +163,22 @@ alias WebSockWrite {
   elseif ($regex(%FrameSwitch, ([cpPbt]).*?([cpPbt]))) {
     %Error = Conflicting switches: $regml(1) $regml(2)
   }
-  elseif ($regex(%DataSwitch, ([^t]))) {
+  elseif ($regex(%DataSwitch, ([^tw]))) {
     %Error = Invalid Data-force switch + $+ $regml(1)
   }
-  elseif (!$regex($1, ^(?!\d+$)[^?*]+$) || !$sock(%Sock)) {
-    %Error = WebSocket does not exist
+  
+  ;; Validate parameter
+  elseif ($0 < 1) {
+    %Error = Missing parameters
   }
-
-  ;; Validate socket state
-  elseif (!$hget(%Sock) || !$len($hget(%Sock, SOCK_STATE))) {
-    hadd -m %Sock ERROR INTERNAL_ERROR State lost
-    _WebSocket.Debug -e %Name $+ >STATE~State lost for %Name
-    _WebSocket.RaiseError %Name INTERNAL_ERROR sock state lost
-  }
-  elseif ($hget(%Sock, CLOSE_PENDING)) {
-    %Error = Close frame already queued; Cannot queue more
-  }
-  elseif ($hget(%Sock, SOCK_STATE) isin 0 5) {
-    %Error = Connection in closing
-  }
-  elseif ($hget(%Sock, SOCK_STATE) !== 4) {
-    %Error = WebSocket connection not established
-  }
-
-  ;; Validate data
   elseif (t !isincs %DataSwitch && $0 == 2 && &?* iswm $2 && $bvar($2, 0) > 4294967295) {
     %Error = Specified bvar exceeds 4gb
   }
-
-  ;; Validation done; start compiling the frame
   else {
+  
+    ;;-------------------;;
+    ;;    BUILD FRAME    ;;
+    ;;-------------------;;
 
     ;; Cleanup just to be safe
     bunset &_WebSocket_SendBuffer &_WebSocket_FrameData %CompFrame
@@ -219,7 +205,7 @@ alias WebSockWrite {
       bset %CompFrame 1 129
       %Type = TEXT
     }
-
+    
     ;; If the data parameter is a bvar use it, otherwise use an internal
     ;; bvar and, if there is data, store that data in the bvar
     if (t !isincs %DataSwitch && &?* iswm $2 && $0 == 2) {
@@ -296,24 +282,89 @@ alias WebSockWrite {
     else {
       bset %CompFrame 2 0
     }
+    
+    ;;----------------------------------;;
+    ;;    Wildcard WebSock Specified    ;;
+    ;;----------------------------------;;
+    if (w isincs %Switches) {
+    
+      ;; loop over all matching websock handles
+      while ($sock(_WebSocket_ $+ $1, %Index)) {
+        %Sock = $v1
+        
+        ;; Check to make sure the WebSock is ready to send data
+        if ($hget(%Sock, SOCK_STATE) == 4 && !$hget(%Sock, CLOSE_PENDING)) {
 
-    ;; Add the frame to the send buffer, update state, and begin sending
-    if ($hget(%Sock, WSFRAME_Buffer, &_WebSocket_SendBuffer)) {
-      bcopy -c &_WebSocket_SendBuffer $calc($bvar(&_WebSocket_SendBuffer, 0) + 1) %CompFrame 1 -1
-      hadd -b %Sock WSFRAME_Buffer &_WebSocket_SendBuffer
+          ;; Add the frame to the send buffer
+          if ($hget(%Sock, WSFRAME_Buffer, &_WebSocket_SendBuffer)) {
+            bcopy -c &_WebSocket_SendBuffer $calc($bvar(&_WebSocket_SendBuffer, 0) + 1) %CompFrame 1 -1
+            hadd -b %Sock WSFRAME_Buffer &_WebSocket_SendBuffer
+          }
+          else {
+            hadd -b %Sock WSFRAME_Buffer %CompFrame
+          }
+
+          ;; Update state if a CLOSE frame is being sent, output debug message,
+          ;; cleanup, and process the send queue
+          if (%Type == CLOSE) {
+            hadd %Sock CLOSE_PENDING $true
+          }
+          _WebSocket.Debug -i %Name $+ >FRAME_SEND~ $+ %Type frame queued. Size: $bvar(%CompFrame, 0) -- Head: $bvar(%CompFrame, 1, 2) -- Payload-Len: $calc($bvar(%CompFrame, 2) % 128)
+          bunset &_WebSocket_SendBuffer &_WebSocket_FrameData
+          _WebSocket.Send %Sock
+        }
+        inc %Index
+      }
+      
+      ;; Cleanup the compiled frame
+      bunset %CompFrame
     }
+
+    ;;---------------------------------;;
+    ;;    Literel WebSock Specified    ;;
+    ;;---------------------------------;;
+    ;; Validate Name and socket state
+    elseif (!$regex($1, ^(?!\d+$)[^?*]+$) || !$sock(_WebSocket_ $+ $1)) {
+      %Error = WebSocket does not exist
+    }
+    elseif (!$hget(_WebSocket_ $+ $1) || !$len($hget(_WebSocket_ $+ $1, SOCK_STATE))) {
+      hadd -m _WebSocket_ $+ $1 ERROR INTERNAL_ERROR State lost
+      _WebSocket.Debug -e $1 $+ >STATE~State lost for $1
+      _WebSocket.RaiseError $1 INTERNAL_ERROR sock state lost
+    }
+    elseif ($hget(_WebSocket_ $+ $1, CLOSE_PENDING)) {
+      %Error = Close frame already queued; Cannot queue more
+    }
+    elseif ($hget(_WebSocket_ $+ $1, SOCK_STATE) isin 0 5) {
+      %Error = Connection in closing
+    }
+    elseif ($hget(_WebSocket_ $+ $1, SOCK_STATE) !== 4) {
+      %Error = WebSocket connection not established
+    }
+   
+    ;; Add the frame to the send queue
     else {
-      hadd -b %Sock WSFRAME_Buffer %CompFrame
-    }
+      %Name = $1
+      %Sock = _WebSocket_ $+ $1
 
-    ;; Update state if a CLOSE frame is being sent, output debug message,
-    ;; cleanup, and process the send queue
-    if (%Type == CLOSE) {
-      hadd %Sock CLOSE_PENDING $true
+      ;; Add the frame to the send buffer
+      if ($hget(%Sock, WSFRAME_Buffer, &_WebSocket_SendBuffer)) {
+        bcopy -c &_WebSocket_SendBuffer $calc($bvar(&_WebSocket_SendBuffer, 0) + 1) %CompFrame 1 -1
+        hadd -b %Sock WSFRAME_Buffer &_WebSocket_SendBuffer
+      }
+      else {
+        hadd -b %Sock WSFRAME_Buffer %CompFrame
+      }
+
+      ;; Update state if a CLOSE frame is being sent, output debug message,
+      ;; cleanup, and process the send queue
+      if (%Type == CLOSE) {
+        hadd %Sock CLOSE_PENDING $true
+      }
+      _WebSocket.Debug -i %Name $+ >FRAME_SEND~ $+ %Type frame queued. Size: $bvar(%CompFrame, 0) -- Head: $bvar(%CompFrame, 1, 2) -- Payload-Len: $calc($bvar(%CompFrame, 2) % 128)
+      bunset &_WebSocket_SendBuffer %CompFrame &_WebSocket_FrameData
+      _WebSocket.Send %Sock
     }
-    _WebSocket.Debug -i %Name $+ >FRAME_SEND~ $+ %Type frame queued. Size: $bvar(%CompFrame, 0) -- Head: $bvar(%CompFrame, 1, 2) -- Payload-Len: $calc($bvar(%CompFrame, 2) % 128)
-    bunset &_WebSocket_SendBuffer %CompFrame &_WebSocket_FrameData
-    _WebSocket.Send %Sock
   }
 
   ;; Handle errors
