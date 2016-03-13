@@ -166,7 +166,7 @@ alias WebSockWrite {
   elseif ($regex(%DataSwitch, ([^tw]))) {
     %Error = Invalid Data-force switch + $+ $regml(1)
   }
-  
+
   ;; Validate parameter
   elseif ($0 < 1) {
     %Error = Missing parameters
@@ -175,7 +175,7 @@ alias WebSockWrite {
     %Error = Specified bvar exceeds 4gb
   }
   else {
-  
+
     ;;-------------------;;
     ;;    BUILD FRAME    ;;
     ;;-------------------;;
@@ -205,7 +205,7 @@ alias WebSockWrite {
       bset %CompFrame 1 129
       %Type = TEXT
     }
-    
+
     ;; If the data parameter is a bvar use it, otherwise use an internal
     ;; bvar and, if there is data, store that data in the bvar
     if (t !isincs %DataSwitch && &?* iswm $2 && $0 == 2) {
@@ -282,16 +282,16 @@ alias WebSockWrite {
     else {
       bset %CompFrame 2 0
     }
-    
+
     ;;----------------------------------;;
     ;;    Wildcard WebSock Specified    ;;
     ;;----------------------------------;;
     if (w isincs %Switches) {
-    
+
       ;; loop over all matching websock handles
       while ($sock(_WebSocket_ $+ $1, %Index)) {
         %Sock = $v1
-        
+
         ;; Check to make sure the WebSock is ready to send data
         if ($hget(%Sock, SOCK_STATE) == 4 && !$hget(%Sock, CLOSE_PENDING)) {
 
@@ -315,7 +315,7 @@ alias WebSockWrite {
         }
         inc %Index
       }
-      
+
       ;; Cleanup the compiled frame
       bunset %CompFrame
     }
@@ -341,7 +341,7 @@ alias WebSockWrite {
     elseif ($hget(_WebSocket_ $+ $1, SOCK_STATE) !== 4) {
       %Error = WebSocket connection not established
     }
-   
+
     ;; Add the frame to the send queue
     else {
       %Name = $1
@@ -408,13 +408,13 @@ alias WebSockClose {
   elseif ($0 < 1) {
     %Error = Missing parameters
   }
-  
+
   else {
-  
+
     ;; if the connection is not to be force-closed
     ;; build a close message
     if (f !isincs %Switches) {
-    
+
       ;; A status code was specified, convert to 16bit int
       if ($regml(StatusCode, 0)) {
         %StatusCode = $base($regml(StatusCode), 10, 2, 16)
@@ -423,19 +423,19 @@ alias WebSockClose {
         %StatusCode = 1000
       }
       bset -c &_WebSocket_SendCloseMsg 1 $base($left(%StatusCode, 8), 2, 10) $base($mid(%StatusCode, 9), 2, 10)
-      
+
       ;; If a message is to accompany the status code, append it
       if ($0 > 1) {
         bset -t &_WebSocket_SendCloseMsg 3 $2-
       }
     }
-    
+
     ;; If w is not in the switches, the sockname is literal
     if (w !isincs %Switches) {
-    
+
       %Name = $1
       %Sock = _WebSocket_ $+ %Name
-    
+
       if (!$regex(%Name, /^(?!\d+$)[^?*-][^?*]*$/)) {
         %Error = Invalid websocket name
       }
@@ -445,13 +445,13 @@ alias WebSockClose {
         ._WebSocket.Cleanup %Sock
         %Error = WebSocket does not exist
       }
-      
+
       ;; if its a force close or the HTTP handshake is incomplete cleanup the
       ;; connection
       elseif (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
         _WebSocket.Cleanup %Sock
       }
-      
+
       ;; check state
       elseif ($hget(%Sock, SOCK_STATE) == 0 || $v1 == 5) {
         %Error = Connection already closing
@@ -467,27 +467,27 @@ alias WebSockClose {
     else {
       %Index = 1
       while (%Index <= $sock(0)) {
-      
+
         ;; grab the sock name
         %Sock = $sock(%Index)
-        
+
         ;; check to see if the sockname matches the specified wildcard
         if (_WebSocket_ $+ $1 iswm %Sock) {
-          
+
           ;; if the f switch is specified or the http handshake has not completed
           ;; simply close the websock and move on to the next sock in the list
           if (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
             _WebSocket.Cleanup %Sock
             continue
           }
-          
+
           ;; otherwise, check if the websock is in the 'ready' state and does not have
           ;; a close pending. If so, send a close frame
           elseif ($hget(%Sock, SOCK_STATE) == 4 && !$hget(%Sock, CLOSE_PENDING)) {
             WebSockWrite -c %Name &_WebSocket_SendCloseMsg
           }
         }
-        
+
         ;; move to the next socket in the list
         inc %Index
       }

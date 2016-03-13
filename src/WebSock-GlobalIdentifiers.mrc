@@ -13,17 +13,17 @@ alias WebSock {
     }
     %Name = $regml(NameFromSignal, 1)
   }
-  
+
   ;; $websock(0)
   elseif ($1 == 0) {
     return $iif(!$len($prop), $sock(_WebSocket_?*, 0))
   }
-  
+
   ;; $websock(name)
   elseif ($regex(Name, $1, /^(?!\d+$)([^?*-][^?*]*)$/)) {
     %Name = $regml(Name, 1)
   }
-  
+
   ;; $websock(wildcard, n)
   elseif ($0 == 2 && $2 isnum 0- && . !isin $2 && (? isin $1 || * isin $1)) {
     if ($2 == 0) {
@@ -154,7 +154,7 @@ alias WebSockFrame {
 
   var %Name = $regml(event, 1), %Sock = _WebSocket_ $+ %Name, %Result
   bunset &_WebSocket_EventFrameData
-  
+
   ;; if no input was given, return the first 3500 bytes of frame data
   if (!$0) {
     if ($hget(%Sock, WSFRAME_DATA, &_WebSocket_EventFrameData)) {
@@ -163,14 +163,14 @@ alias WebSockFrame {
       return %Result
     }
   }
-  
+
   ;; if a bvar has been specified, fill it with the frame data
   elseif (&?* iswm $1 && $0 == 1 && $chr(32) !isin $1) {
     %Result = $hget(%Sock, WSFRAME_DATA, &_WebSocket_EventFrameData)
     bunset &_WebSocket_EventFrameData
     return %Result
   }
-  
+
   ;; if "Size" is the input, return the size of the frame data in bytes
   elseif ($1- == Size) {
     %Result = $hget(%Sock, WSFRAME_DATA, &_WebSocket_EventFrameData)
@@ -178,12 +178,12 @@ alias WebSockFrame {
     bunset &_WebSocket_EventFrameData
     return %Result
   }
-  
+
   ;; if "type" is the input return the frame type
   elseif ($1- == Type) {
     return $hget(%Sock, WSFRAME_TYPE)
   }
-  
+
   ;; if "TypeText" is the input, return the frame type's text equivalent
   elseif ($1- == TypeText) {
     %Result = $hget(%Sock, WSFRAME_TYPE)
