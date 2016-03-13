@@ -326,86 +326,120 @@ alias WebSockWrite {
   }
 }
 
-;; /WebSockClose -fe<code> sockname [reason]
+;; /WebSockClose -wfe<code> sockname [reason]
 alias WebSockClose {
-  var %Switches, %Error, %Name, %Sock, %errorcode
+  var %Switches, %Error, %Name, %Sock, %StatusCode, %Index
 
   ;; Get switches, websock name, and sockname from inputs
   if (-* iswm $1) {
     %Switches = $mid($1, 2)
     tokenize 32 $2-
   }
-  %Name = $1
-  %Sock = _WebSocket_ $+ %Name
 
   ;; Validate switches
-  if ($regex(%Switches, ([^fe\d]))) {
+  if ($regex(%Switches, ([^wfe\d]))) {
     %Error = Unknown switch specified: $regml(1)
   }
-  elseif ($regex(%Switches, /([fe]).*\1/)) {
+  elseif ($regex(%Switches, /([wfe]).*\1/)) {
     %Error = Duplicate switch specified: $regml(1)
   }
   elseif ($regex(%switches, /([fe]).*?([fe])/)) {
     %Error = Conflicting switches specified: $regml(1) $regml(2)
   }
-  elseif (e isincs %Switches && !$regex(errorcode, %Switches, /e(\d{4})/)) {
+  elseif (e isincs %Switches && !$regex(StatusCode, %Switches, /e(\d{4})/)) {
     %Error = Invalid error code
+  }
+  elseif (e !isincs %Switches && $regex(%Switches, \d)) {
+    %Error = Status Codes can only be specified with the -e switch
   }
 
   ;; Validate parameters
   elseif ($0 < 1) {
     %Error = Missing parameters
   }
-  elseif (!$regex(%Name, /^(?!\d+$)[^?*-][^?*]*$/)) {
-    %Error = Invalid websocket name
-  }
-
-  ;; Validate state
-  elseif (!$sock(%Sock)) {
-    ._WebSocket.Cleanup %Sock
-    %Error = WebSocket does not exist
-  }
-
-  ;; if its a force close or the HTTP handshake is incomplete cleanup the
-  ;; connection
-  elseif (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
-    _WebSocket.Cleanup %Sock
-  }
-
-  ;; check state
-  elseif ($hget(%Sock, SOCK_STATE) == 0 || $v1 == 5) {
-    %Error = Connection already closing
-  }
-  elseif ($hget(%Sock, CLOSE_PENDING)) {
-    %Error = CLOSE frame already sent
-  }
-
-  ;; send close-frame
+  
   else {
-
-    if ($0 == 1) {
-      WebSockWrite -c %Name
-    }
-    else {
-      ;; Specified status code, convert to 16bit int
-      if ($regml(errorcode, 1)) {
-        %StatusCode = $base($v1, 10, 2, 16)
-        bset -c &_WebSocket_CloseStatusCode 1 $base($left(%StatusCode, 8), 2, 10) $base($mid(%StatusCode, 9), 2, 10)
+  
+    ;; if the connection is not to be force-closed
+    ;; build a close message
+    if (f !isincs %Switches) {
+    
+      ;; A status code was specified, convert to 16bit int
+      if ($regml(StatusCode, 0)) {
+        %StatusCode = $base($regml(StatusCode), 10, 2, 16)
       }
-
-      ;; No status code, use 1000
       else {
-        bset -c &_WebSocket_CloseStatusCode 1 3 232
+        %StatusCode = 1000
       }
-
+      bset -c &_WebSocket_SendCloseMsg 1 $base($left(%StatusCode, 8), 2, 10) $base($mid(%StatusCode, 9), 2, 10)
+      
       ;; If a message is to accompany the status code, append it
       if ($0 > 1) {
-        bset -t &_WebSocket_CloseStatusCode 2 $2-
+        bset -t &_WebSocket_SendCloseMsg 3 $2-
+      }
+    }
+    
+    ;; If w is not in the switches, the sockname is literal
+    if (w !isincs %Switches) {
+    
+      %Name = $1
+      %Sock = _WebSocket_ $+ %Name
+    
+      if (!$regex(%Name, /^(?!\d+$)[^?*-][^?*]*$/)) {
+        %Error = Invalid websocket name
       }
 
-      ;; call the WebSockWrite command then cleanup
-      WebSockWrite -c %Name &_WebSocket_CloseStatusCode
-      bunset &_WebSOcket_CloseStatusCode
+      ;; Validate state
+      elseif (!$sock(%Sock)) {
+        ._WebSocket.Cleanup %Sock
+        %Error = WebSocket does not exist
+      }
+      
+      ;; if its a force close or the HTTP handshake is incomplete cleanup the
+      ;; connection
+      elseif (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
+        _WebSocket.Cleanup %Sock
+      }
+      
+      ;; check state
+      elseif ($hget(%Sock, SOCK_STATE) == 0 || $v1 == 5) {
+        %Error = Connection already closing
+      }
+      elseif ($hget(%Sock, CLOSE_PENDING)) {
+        %Error = CLOSE frame already sent
+      }
+      else {
+        WebSockWrite -c %Name &_WebSocket_SendCloseMsg
+        bunset &_WebSocket_SendCloseMsg
+      }
+    }
+    else {
+      %Index = 1
+      while (%Index <= $sock(0)) {
+      
+        ;; grab the sock name
+        %Sock = $sock(%Index)
+        
+        ;; check to see if the sockname matches the specified wildcard
+        if (_WebSocket_ $+ $1 iswm %Sock) {
+          
+          ;; if the f switch is specified or the http handshake has not completed
+          ;; simply close the websock and move on to the next sock in the list
+          if (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
+            _WebSocket.Cleanup %Sock
+            continue
+          }
+          
+          ;; otherwise, check if the websock is in the 'ready' state and does not have
+          ;; a close pending. If so, send a close frame
+          elseif ($hget(%Sock, SOCK_STATE) == 4 && !$hget(%Sock, CLOSE_PENDING)) {
+            WebSockWrite -c %Name &_WebSocket_SendCloseMsg
+          }
+        }
+        
+        ;; move to the next socket in the list
+        inc %Index
+      }
     }
   }
 
