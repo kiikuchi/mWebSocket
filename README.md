@@ -59,8 +59,8 @@ Commands
 &nbsp;  
 &nbsp;   
 
-#### `/WebSockWrite -[cpPbt]+t name text|&bvar`
-> Sends the specified frame through the WebSocket.  
+#### `/WebSockWrite -[cpPbt]+tw name text|&bvar`
+> Sends the specified frame through a WebSocket.  
 > Can only be used after the HANDSHAKE has completed.  
 
 **Switches**
@@ -80,7 +80,10 @@ Commands
 > The data should be sent as a TEXT frame (default)  
 >  
 > `+t`  
-> The passed data is to be treated as plain-text
+> The passed data is to be treated as plain-text  
+>  
+> `+w`  
+> The specified `name` is a wildcard. The frame will be added to all matching and applicable web sockets.
 
 &nbsp;  
 **Parameters**
@@ -111,18 +114,27 @@ Commands
 &nbsp;  
 &nbsp;  
 
-#### `/WebSockClose -f name`
+#### `/WebSockClose -fwe[code] name msg`
 > Sends a CLOSE control-frame to the server  
 
 **Switches**  
 > `-f`  
 > If specified the socket will be immediately closed  
+>  
+> `-w`  
+> The specified `name` parameter is a wildcard. All applicable websockets will be closed  
+>  
+> `-e[code]`  
+> The specified status code will be sent with the close frame; otherwise 1000 is used  
 
 &nbsp;  
 **Parameters**  
 > `name` - required  
 > The WebSocket to close  
-
+>  
+> `data` - optional
+> Text data to send with the close frame  
+  
 &nbsp;  
 &nbsp;
 
@@ -141,13 +153,17 @@ Identifiers
 &nbsp;  
 &nbsp;  
 
-#### `$WebSock(name)`  
+#### `$WebSock(name[,n])`  
 > Returns the websocket name if it exists  
 
 **Parameters**  
 > `name` - required  
 > The name of the WebSocket instance  
+>  
+>  `n` - optional
+> if specified, `name` is assumed to be a wildcard and data related to the nth matching websock is returned  
 
+&nbsp;  
 **Properties**  
 > `State`  
 > Returns the current websocket state  
