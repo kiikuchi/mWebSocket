@@ -8,7 +8,7 @@ alias WebSock {
 
   ;; Deduce the websock and socket name from event
   if (!$0) {
-    if ($event !== signal || !$regex(NameFromSignal, $signal, /^WebSocket_[a-zA-z]+_(?!\d+$)([^?*-][^?*]*)$/i)) {
+    if ($event !== signal || !$regex(NameFromSignal, $signal, /^WebSocket_[a-zA-Z]+_(?!\d+$)([^?*-][^?*]*)$/i)) {
       return
     }
     %Name = $regml(NameFromSignal, 1)
