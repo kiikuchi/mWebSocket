@@ -466,27 +466,22 @@ alias WebSockClose {
     }
     else {
       %Index = 1
-      while (%Index <= $sock(0)) {
+      while ($sock(_WebSocket_ $+ $1, %Index)) {
 
         ;; grab the sock name
-        %Sock = $sock(%Index)
+        %Sock = $v1
 
-        ;; check to see if the sockname matches the specified wildcard
-        if (_WebSocket_ $+ $1 iswm %Sock) {
-          %Name = $gettok(%Sock, 2-, 95)
+        ;; if the f switch is specified or the http handshake has not completed
+        ;; simply close the websock and move on to the next sock in the list
+        if (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
+          _WebSocket.Cleanup %Sock
+          continue
+        }
 
-          ;; if the f switch is specified or the http handshake has not completed
-          ;; simply close the websock and move on to the next sock in the list
-          if (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
-            _WebSocket.Cleanup %Name
-            continue
-          }
-
-          ;; otherwise, check if the websock is in the 'ready' state and does not have
-          ;; a close pending. If so, send a close frame
-          elseif ($hget(%Sock, SOCK_STATE) == 4 && !$hget(%Sock, CLOSE_PENDING)) {
-            WebSockWrite -c %Name &_WebSocket_SendCloseMsg
-          }
+        ;; otherwise, check if the websock is in the 'ready' state and does not have
+        ;; a close pending. If so, send a close frame
+        elseif ($hget(%Sock, SOCK_STATE) == 4 && !$hget(%Sock, CLOSE_PENDING)) {
+          WebSockWrite -c $gettok(%Sock, 2-, 95) &_WebSocket_SendCloseMsg
         }
 
         ;; move to the next socket in the list
