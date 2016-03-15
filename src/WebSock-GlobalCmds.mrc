@@ -473,11 +473,12 @@ alias WebSockClose {
 
         ;; check to see if the sockname matches the specified wildcard
         if (_WebSocket_ $+ $1 iswm %Sock) {
+          %Name = $gettok(%Sock, 2-, 95)
 
           ;; if the f switch is specified or the http handshake has not completed
           ;; simply close the websock and move on to the next sock in the list
           if (f isincs %Switches || $hget(%Sock, SOCK_STATE) isnum 1-3) {
-            _WebSocket.Cleanup %Sock
+            _WebSocket.Cleanup %Name
             continue
           }
 

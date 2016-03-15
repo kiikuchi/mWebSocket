@@ -166,9 +166,8 @@ alias WebSockFrame {
 
   ;; if a bvar has been specified, fill it with the frame data
   elseif (&?* iswm $1 && $0 == 1 && $chr(32) !isin $1) {
-    %Result = $hget(%Sock, WSFRAME_DATA, &_WebSocket_EventFrameData)
-    bunset &_WebSocket_EventFrameData
-    return %Result
+    bunset $1
+    Return $hget(%Sock, WSFRAME_DATA, $1)
   }
 
   ;; if "Size" is the input, return the size of the frame data in bytes
