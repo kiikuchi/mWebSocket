@@ -93,7 +93,7 @@ alias WebSockHeader {
   var %Error, %Name, %Sock
 
   ;; Validate the alias was used from a WebSocket INIT signal event
-  if (!$isid || $event !== signal || !$regex($signal, /^WebSocket_INIT_(?!\d+$)([^?*-][^?*]*)$/i)) {
+  if ($isid || $event !== signal || !$regex($signal, /^WebSocket_INIT_(?!\d+$)([^?*-][^?*]*)$/i)) {
     return
   }
   else {
@@ -119,7 +119,7 @@ alias WebSockHeader {
       }
       else {
         %Index = $calc($hfind(%Sock, ^HTTPREQ_HEADER\d+_, 0, r) + 1)
-        hadd -m %Sock $+(HTTPREQ_HEADER, %Index, _, %Header) %Value
+        hadd -m %Sock $+(HTTPREQ_HEADER, %Index, _, %Header) $2-
       }
     }
   }

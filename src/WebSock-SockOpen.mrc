@@ -44,7 +44,7 @@ on $*:SOCKOPEN:/^_WebSocket_(?!\d+$)[^-?*][^?*]*$/:{
     ;; Loop over headers, adding them to the request
     %Index = 1
     while ($hfind($sockname, /^HTTPREQ_HEADER\d+_([^\s]+)$/, %Index, r)) {
-      _WebSocket.BAdd &_WebSocket_HttpReq $regml(1) $hget($sockname, $v1)
+      _WebSocket.BAdd &_WebSocket_HttpReq $regml(1) $+ : $hget($sockname, $v1)
       inc %Index
     }
 
