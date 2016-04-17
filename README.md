@@ -59,6 +59,31 @@ Commands
 &nbsp;  
 &nbsp;   
 
+#### `/WebSockMark -rn name item [text|&bvar]`
+> Stores the specified item-data pair.  
+> Use `$WebSockMark` to access stored data.  
+
+**Switches**
+> `-n`  
+> The value is to be interpreted as plain text
+>  
+> `-r`  
+> The specified item is to be removed
+
+&nbsp;  
+**Parameters**
+> **`name`** - required  
+> The name to reference the handler by. Must be not be an interger or start with `-`  
+>  
+> **`item`** - required  
+> The name to be used to reference the specified data 
+>  
+> **`text|&bvar`** - requied unless -r switch is used 
+> The data to be stored.
+
+&nbsp;  
+&nbsp;   
+
 #### `/WebSockWrite -[cpPbt]+tw name text|&bvar`
 > Sends the specified frame through a WebSocket.  
 > Can only be used after the HANDSHAKE has completed.  
@@ -215,6 +240,26 @@ Identifiers
 > Returns the nth header.  
 > if a `[header]` name is not specified, the nth header name is returned  
 > if `0` the total number of headers is returned  
+
+&nbsp;  
+&nbsp;  
+
+#### `$WebSockMark(name, item|n)[.item]`  
+> Returns stored data associated with the specified item  
+
+**Parameters**  
+> `name` - Required  
+> The name of the WebSocket instance  
+>  
+> `item|n` - Optional  
+> The item to return data for  
+> If `item` is an integer the nth stored item name is returned  
+> if `item` is 0, the total number of items stored is returned  
+
+&nbsp;  
+**Properties**  
+> `item`  
+> If specified, the input `item` is treated as a iteral name even if numerical  
 
 &nbsp;  
 &nbsp;  
