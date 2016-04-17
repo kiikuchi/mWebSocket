@@ -208,17 +208,15 @@ alias WebSockFrame {
 ;; $WebSockErr
 ;;   Returns the error that caused the error event to be raised
 alias WebSockErr {
-  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_ERROR_(?!\d*$)([^?*-][^?*-]*)$/)) {
-    return
+  if ($isid && $event == signal && $regex(event, $signal, /^WebSocket_ERROR_(?!\d*$)([^?*-][^?*-]*)$/i)) {
+    return $gettok($hget(_WebSocket_ $+ $regml(event, 1), Error), 1, 32)
   }
-  return $gettok($hget(_WebSocket_ $+ $regml(event, 1), ERROR), 1, 32)
 }
 
 ;; $WebSockErrMsg
 ;;   Returns the error msg that caused the error event to be raised
 alias WebSockErrMsg {
-  if (!$isid || $event !== signal || !$regex(event, $signal, /^WebSocket_ERROR_(?!\d*$)([^?*-][^?*-]*)$/)) {
-    return
+  if ($isid && $event == signal && $regex(event, $signal, /^WebSocket_ERROR_(?!\d*$)([^?*-][^?*-]*)$/i)) {
+    return $gettok($hget(_WebSocket_ $+ $regml(event, 1), Error), 2-, 32)
   }
-  return $gettok($hget(_WebSocket_ $+ $regml(event, 1), ERROR), 2-, 32)
 }

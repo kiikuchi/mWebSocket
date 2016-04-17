@@ -88,7 +88,7 @@ alias WebSockOpen {
 }
 
 ;; /WebSockHeader Header Value
-;;   Settings the HTTP header for a pending WebSock http request
+;;   Sets the HTTP header for a pending WebSock http request
 alias WebSockHeader {
   var %Error, %Name, %Sock
 
@@ -130,6 +130,92 @@ alias WebSockHeader {
     echo -sg * /WebSockHeader: $v1
     reseterror
     halt
+  }
+}
+
+;; /WebSockMark -rn name item value
+;; $WebSockMark(name, item|n).item
+;; Stores or retreives data related to the websocket
+alias WebSockMark {
+  var %Error, %Switches
+
+  ;; As-Identifer handling
+  if ($isid) {
+
+    ;; validate inputs
+    if ($0 !== 2) {
+      %Error = Invalid parameters
+    }
+    elseif (!$regex($1, ^(?!\d+$)[^?*]+$) || !$sock(_WebSocket_ $+ $1)) {
+      %Error = WebSocket does not exist
+    }
+    elseif ($chr(32) isin $2) {
+      %Error = Item name cannot contain spaces
+    }
+
+    ;; If the item is NOT a number or the prop is 'item' return the data matching the specified item
+    elseif (!$regex($2, /^\d+$/) || $prop === item) {
+      return $hget(_WebSocket_ $+ $1, MARK_ $+ $2)
+    }
+
+    ;; otherwise return the nth item
+    return $hfind(_WebSocket_ $+ $1, MARK_*, $2, w)
+  }
+
+  ;; As-Command handling
+  else {
+
+    ;; seperate switches from input
+    if (-* iswm $1) {
+      %Switches = $Mid($1, 2-)
+      tokenize 32 $2-
+    }
+
+    ;; verify switches
+    if ($regex(%Switches, ([^nr]))) {
+      %Error = Unknown switch specified: $regml(1)
+    }
+    elseif ($regex(%Switches, ([nr]).*\1)) {
+      %Error = Duplicate switch specified: $regml(1)
+    }
+    elseif ($regex(%Switches, /[nr]/g) > 1) {
+      %Error = Conflicting switches specified
+    }
+
+    ;; Validate parameters
+    elseif ((r isincs %switches && $0 != 2) || (r !isincs %switches && $0 < 3)) {
+      %Error = Invalid parameters
+    }
+    elseif (!$regex($1, ^(?!\d+$)[^?*]+$) || !$sock(_WebSocket_ $+ $1)) {
+      %Error = WebSocket does not exist
+    }
+
+    ;; If the r switch is specified, delete the item
+    elseif (r isincs %switches) {
+      hdel _WebSocket_ $+ $1 MARK_ $+ $2
+    }
+
+    ;; if the n switch or a non-bvar-input is specified add the data to the table as-is
+    elseif (n isincs %switches || &?* !iswm $3 || $0 > 3) {
+      hadd -m _WebSocket_ $+ $1 MARK_ $+ $2-
+    }
+
+    ;; otherwise, add the data to the table as though its a bvar
+    else {
+      hadd -mb _WebSocket_ $+ $1 MARK_ $+ $2-
+    }
+  }
+
+  ;; error handling
+  :error
+  if ($error || %Error) {
+    %Error = $v1
+    echo $color(info).dd -s * $iif($isid, $, /) $+ WebSockMark: %Error
+    _WebSocket.Debug -e $iif($isid, $, /) $+ WebSockMark~ $+ %Error
+    reseterror
+    if (!$isid) {
+      halt
+    }
   }
 }
 

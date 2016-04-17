@@ -5,7 +5,6 @@ alias -l _WebSocket.Debug
 menu @WebSocketDebug {
   $iif($WebSockDebug, Disable, Enable): WebSocketDebug
   -
-  Save: noop
   Clear:clear @WebSocketDebug
   -
   Close: .disable #_WebSocket_Debug | close -@ @WebSocketDebug
