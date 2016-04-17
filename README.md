@@ -78,7 +78,7 @@ Commands
 > **`item`** - required  
 > The name to be used to reference the specified data 
 >  
-> **`text|&bvar`** - requied unless -r switch is used 
+> **`text|&bvar`** - requied unless -r switch is used  
 > The data to be stored.
 
 &nbsp;  
