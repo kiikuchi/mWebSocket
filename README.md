@@ -29,7 +29,7 @@ Requirements
 
 Installing
 ----------
-1. Download `mWebSocket-vx.x.xxxx-stable.mrc` from the root directly or `mWebSocket-vx.x.xxxx-yyyy.mrc` from the /builds/ directory  
+1. Download [the latest release](https://github.com/SReject/mWebSocket/releases) or `mWebSocket-vx.x.xxxx-yyyy.mrc` from the /builds/ directory  
 2. In mIRC/AdiIRC, enter the following command in an editbox: `//load -rs $$sfile($mircdir, Load, Open)`  
 3. Navigate to and select the downloaded file  
 4. Click "Open"  
