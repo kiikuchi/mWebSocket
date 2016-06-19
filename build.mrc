@@ -1,4 +1,8 @@
-;; mWebSocket_build -abMm[N]
+;; build_mWebSocket -abMm[N]
+;; -a    : alpha build
+;; -b    : beta build
+;; -M    : Major version bump
+;; -m[n] : Minor version bump; n position to bump
 alias Build_mWebSocket {
   if ($isid) {
     return
