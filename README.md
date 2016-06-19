@@ -1,11 +1,7 @@
 # mWebSocket
 mWebSocket aims to implement the client portion of the [WebSocket Standard](https://tools.ietf.org/html/rfc6455) in mSL for mIRC and AdiIRC. It is not, however, a fully featured HTTP client and as such will not follow HTTP redirects or process non-websocket related responses.  
-&nbsp;  
+&nbsp;   
 
-If no issues are reported within the next 30 days (May 19th to June 18th) I will move the current release to a stable build  
-&nbsp;  
-
-&nbsp;  
 If you appreciate the work done, consider donating via paypal: froggiedafrog@aim.com  
 
 &nbsp;  
